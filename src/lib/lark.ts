@@ -36,15 +36,19 @@ const SERIAL_CANDIDATES = [
 ];
 
 const EXTRA_CANDIDATES = [
-  "asset tag",
-  "tag",
+  "asset id",
   "location",
-  "category",
+  "current status",
   "brand",
   "model",
-  "status",
+  "asset category",
+  "category",
+  "current assignee",
+  "asset tag",
+  "tag",
   "owner",
   "department",
+  "status",
   "type",
 ];
 
@@ -218,12 +222,13 @@ function pickField(fields: string[], configured: string, candidates: string[]): 
 function pickExtraFields(fields: string[], used: string[]): string[] {
   const usedKeys = new Set(used.map(normalizeKey));
   const extras: string[] = [];
-  for (const field of fields) {
-    const key = normalizeKey(field);
-    if (usedKeys.has(key)) continue;
-    if (EXTRA_CANDIDATES.includes(key) || EXTRA_CANDIDATES.some((item) => key.includes(item))) {
-      extras.push(field);
-    }
+  for (const candidate of EXTRA_CANDIDATES) {
+    const match = fields.find((field) => {
+      const key = normalizeKey(field);
+      if (usedKeys.has(key) || extras.includes(field)) return false;
+      return key === candidate || key.includes(candidate);
+    });
+    if (match) extras.push(match);
     if (extras.length >= 4) break;
   }
   return extras;
@@ -282,6 +287,9 @@ export async function resolveLarkContext() {
     tables.find((item) => item.table_id === configuredTableId) ??
     tables.find(
       (item) => normalizeKey(item.name ?? "") === normalizeKey(configuredTableName)
+    ) ??
+    tables.find((item) =>
+      normalizeKey(item.name ?? "").includes("asset register")
     ) ??
     tables.find((item) =>
       normalizeKey(item.name ?? "").includes("asset")

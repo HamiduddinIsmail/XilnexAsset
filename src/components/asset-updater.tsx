@@ -346,7 +346,7 @@ export function AssetUpdater() {
                           >
                             {asset.serialNumber || "No serial yet"}
                           </p>
-                          {asset.extra.Location || asset.extra["Asset Tag"] ? (
+                          {asset.extra["Asset ID"] || asset.extra.Location || asset.extra["Asset Tag"] ? (
                             <p
                               className={cn(
                                 "truncate text-xs",
@@ -355,7 +355,7 @@ export function AssetUpdater() {
                                   : "text-muted-foreground"
                               )}
                             >
-                              {[asset.extra["Asset Tag"], asset.extra.Location]
+                              {[asset.extra["Asset ID"], asset.extra["Asset Tag"], asset.extra.Location]
                                 .filter(Boolean)
                                 .join(" · ")}
                             </p>

@@ -16,6 +16,7 @@ export function fieldToString(value: unknown): string {
     if (typeof record.name === "string") return record.name.trim();
     if (typeof record.full_address === "string") return record.full_address.trim();
     if (typeof record.link === "string") return record.link.trim();
+    if ("value" in record) return fieldToString(record.value);
   }
   return "";
 }
