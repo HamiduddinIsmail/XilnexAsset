@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Camera, ImageUp, Loader2, SwitchCamera } from "lucide-react";
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -18,20 +17,26 @@ import { extractSerialCandidates, looksLikeSerial, sanitizeSerial } from "@/lib/
 const CAMERA_ELEMENT_ID = "asset-serial-camera";
 const FILE_ELEMENT_ID = "asset-serial-file";
 
-const BARCODE_FORMATS = [
-  Html5QrcodeSupportedFormats.QR_CODE,
-  Html5QrcodeSupportedFormats.CODE_128,
-  Html5QrcodeSupportedFormats.CODE_39,
-  Html5QrcodeSupportedFormats.CODE_93,
-  Html5QrcodeSupportedFormats.EAN_13,
-  Html5QrcodeSupportedFormats.EAN_8,
-  Html5QrcodeSupportedFormats.UPC_A,
-  Html5QrcodeSupportedFormats.UPC_E,
-  Html5QrcodeSupportedFormats.ITF,
-  Html5QrcodeSupportedFormats.CODABAR,
-  Html5QrcodeSupportedFormats.DATA_MATRIX,
-  Html5QrcodeSupportedFormats.PDF_417,
-];
+type Html5QrcodeClient = import("html5-qrcode").Html5Qrcode;
+
+async function loadHtml5Qrcode() {
+  const mod = await import("html5-qrcode");
+  const formats = [
+    mod.Html5QrcodeSupportedFormats.QR_CODE,
+    mod.Html5QrcodeSupportedFormats.CODE_128,
+    mod.Html5QrcodeSupportedFormats.CODE_39,
+    mod.Html5QrcodeSupportedFormats.CODE_93,
+    mod.Html5QrcodeSupportedFormats.EAN_13,
+    mod.Html5QrcodeSupportedFormats.EAN_8,
+    mod.Html5QrcodeSupportedFormats.UPC_A,
+    mod.Html5QrcodeSupportedFormats.UPC_E,
+    mod.Html5QrcodeSupportedFormats.ITF,
+    mod.Html5QrcodeSupportedFormats.CODABAR,
+    mod.Html5QrcodeSupportedFormats.DATA_MATRIX,
+    mod.Html5QrcodeSupportedFormats.PDF_417,
+  ];
+  return { Html5Qrcode: mod.Html5Qrcode, formats };
+}
 
 type CameraDevice = { id: string; label: string };
 
@@ -64,7 +69,7 @@ async function waitForElement(id: string) {
 
 export function ScanDialog({ open, onOpenChange, onDetected, showSamples = false }: ScanDialogProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const liveRef = useRef<Html5Qrcode | null>(null);
+  const liveRef = useRef<Html5QrcodeClient | null>(null);
   const runningRef = useRef(false);
   const handledRef = useRef(false);
   const [cameras, setCameras] = useState<CameraDevice[]>([]);
@@ -94,9 +99,10 @@ export function ScanDialog({ open, onOpenChange, onDetected, showSamples = false
   async function startCamera(id: string) {
     await stopCamera();
     await waitForElement(CAMERA_ELEMENT_ID);
+    const { Html5Qrcode, formats } = await loadHtml5Qrcode();
     const scanner = new Html5Qrcode(CAMERA_ELEMENT_ID, {
       verbose: false,
-      formatsToSupport: BARCODE_FORMATS,
+      formatsToSupport: formats,
     });
     liveRef.current = scanner;
     await scanner.start(
@@ -140,6 +146,7 @@ export function ScanDialog({ open, onOpenChange, onDetected, showSamples = false
         if (cancelled) return;
         setBusy("camera");
         setStatus("Starting camera…");
+        const { Html5Qrcode } = await loadHtml5Qrcode();
         const devices = await Html5Qrcode.getCameras();
         if (cancelled) return;
         setCameras(devices);
@@ -200,9 +207,10 @@ export function ScanDialog({ open, onOpenChange, onDetected, showSamples = false
     await stopCamera();
     try {
       await waitForElement(FILE_ELEMENT_ID);
+      const { Html5Qrcode, formats } = await loadHtml5Qrcode();
       const fileScanner = new Html5Qrcode(FILE_ELEMENT_ID, {
         verbose: false,
-        formatsToSupport: BARCODE_FORMATS,
+        formatsToSupport: formats,
       });
       try {
         const decoded = await fileScanner.scanFile(file, false);

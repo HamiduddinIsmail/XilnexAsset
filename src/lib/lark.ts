@@ -86,6 +86,7 @@ async function larkFetch<T>(
     ...rest,
     headers,
     cache: "no-store",
+    signal: rest.signal ?? AbortSignal.timeout(20_000),
   });
 
   let body: {

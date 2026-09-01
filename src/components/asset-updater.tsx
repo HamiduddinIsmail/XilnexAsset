@@ -45,10 +45,18 @@ import { cn } from "@/lib/utils";
 
 type Filter = "all" | "missing" | "has";
 
-export function AssetUpdater() {
-  const [payload, setPayload] = useState<AssetsPayload | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+type AssetUpdaterProps = {
+  initialPayload?: AssetsPayload | null;
+  initialError?: string | null;
+};
+
+export function AssetUpdater({
+  initialPayload = null,
+  initialError = null,
+}: AssetUpdaterProps) {
+  const [payload, setPayload] = useState<AssetsPayload | null>(initialPayload);
+  const [loadError, setLoadError] = useState<string | null>(initialError);
+  const [loading, setLoading] = useState(!initialPayload && !initialError);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("missing");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -87,6 +95,8 @@ export function AssetUpdater() {
   }
 
   useEffect(() => {
+    if (initialPayload || initialError) return;
+
     let cancelled = false;
     async function initialLoad() {
       try {
@@ -108,7 +118,7 @@ export function AssetUpdater() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [initialPayload, initialError]);
 
   function selectAsset(recordId: string, currentSerial: string) {
     setSelectedId(recordId);
