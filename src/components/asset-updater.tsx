@@ -213,16 +213,26 @@ export function AssetUpdater({
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1.5">
-          <div className="flex items-center gap-2 text-[var(--brand)]">
-            <ScanLine className="size-6" />
-            <p className="text-sm font-medium tracking-wide uppercase">Asset Register</p>
+          <div className="flex items-start gap-3">
+            <img
+              src="/xilnex-logo.jpg"
+              alt="Xilnex Holdings"
+              width={48}
+              height={48}
+              className="size-12 rounded-xl bg-white shadow-sm ring-1 ring-foreground/10"
+            />
+            <div className="space-y-1">
+              <p className="text-sm font-medium tracking-wide text-[var(--brand)]">
+                Xilnex Holdings
+              </p>
+              <h1 className="font-heading text-2xl font-semibold tracking-tight sm:text-3xl">
+                Serial number updater
+              </h1>
+            </div>
           </div>
-          <h1 className="font-heading text-2xl font-semibold tracking-tight sm:text-3xl">
-            Serial number updater
-          </h1>
-          <p className="max-w-2xl text-sm text-muted-foreground sm:text-[0.95rem]">
-            Pick an asset, scan its barcode or serial plate, then write that value to the
-            matching Lark Base record. No copy-paste, no wrong row.
+          <p className="max-w-2xl text-sm text-muted-foreground sm:mt-1 sm:text-[0.95rem]">
+            Pick an asset from the Asset Register, scan its barcode or serial plate, then write
+            that value to the matching Lark Base record. No copy-paste, no wrong row.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

@@ -16,9 +16,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Asset serial updater",
+  title: "Xilnex · Asset serial updater",
   description:
     "Scan an asset barcode or serial plate and write it to the matching Lark Base Asset Register record.",
+  icons: {
+    icon: "/xilnex-logo.jpg",
+    apple: "/xilnex-logo.jpg",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
