@@ -73,7 +73,7 @@ export function AssetUpdater({
   async function load(options?: { keepSelection?: boolean }) {
     setLoadError(null);
     try {
-      const response = await fetch("/api/assets", { cache: "no-store" });
+      const response = await fetch("/api/assets?fresh=1", { cache: "no-store" });
       const body = (await response.json()) as AssetsPayload & { error?: string };
       if (!response.ok) {
         throw new Error(body.error || "Could not load the Asset Register.");
@@ -188,7 +188,12 @@ export function AssetUpdater({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ serialNumber: serial }),
       });
-      const body = (await response.json()) as UpdateSerialResult & { error?: string };
+      let body: UpdateSerialResult & { error?: string };
+      try {
+        body = (await response.json()) as UpdateSerialResult & { error?: string };
+      } catch {
+        throw new Error("The server replied, but the result could not be read. Refresh — Lark may already have the serial.");
+      }
       if (!response.ok) {
         throw new Error(body.error || "Update failed.");
       }
@@ -203,7 +208,14 @@ export function AssetUpdater({
       await load({ keepSelection: true });
       setSerial(body.serialNumber);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not save the serial number.");
+      const message =
+        error instanceof TypeError ||
+        (error instanceof Error && error.message === "Failed to fetch")
+          ? "Could not reach the server. Refresh the list — if the serial is already on the asset, Lark saved it."
+          : error instanceof Error
+            ? error.message
+            : "Could not save the serial number.";
+      toast.error(message);
     } finally {
       setSubmitting(false);
     }

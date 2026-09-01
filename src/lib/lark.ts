@@ -53,6 +53,8 @@ const EXTRA_CANDIDATES = [
 ];
 
 let tokenCache: TokenCache | null = null;
+let contextCache: { at: number; value: Awaited<ReturnType<typeof buildLarkContext>> } | null = null;
+const CONTEXT_TTL_MS = 5 * 60_000;
 
 export function isLarkConfigured(): boolean {
   return Boolean(
@@ -269,6 +271,15 @@ async function searchAllRecords(
 }
 
 export async function resolveLarkContext() {
+  if (contextCache && Date.now() - contextCache.at < CONTEXT_TTL_MS) {
+    return { ...contextCache.value, token: await getTenantToken() };
+  }
+  const value = await buildLarkContext();
+  contextCache = { at: Date.now(), value };
+  return { ...value, token: await getTenantToken() };
+}
+
+async function buildLarkContext() {
   const token = await getTenantToken();
   const fromUrl = env("LARK_BASE_URL") ? tokenFromBaseUrl(env("LARK_BASE_URL")) : {};
   const rawAppToken = env("LARK_APP_TOKEN") || fromUrl.appToken || "";
@@ -314,7 +325,6 @@ export async function resolveLarkContext() {
   const extraFields = pickExtraFields(fields, [nameField, serialField]);
 
   return {
-    token,
     appToken,
     tableId: table.table_id,
     tableName: table.name || configuredTableName,
@@ -361,6 +371,43 @@ export async function listLarkAssets(): Promise<{
     nameField: ctx.nameField,
     serialField: ctx.serialField,
     assets,
+  };
+}
+
+export async function findAssetWithSerial(serialNumber: string, exceptRecordId: string) {
+  const ctx = await resolveLarkContext();
+  const body = await larkFetch<{
+    data?: { items?: LarkRecord[] };
+  }>(
+    `/open-apis/bitable/v1/apps/${ctx.appToken}/tables/${ctx.tableId}/records/search?page_size=20`,
+    {
+      method: "POST",
+      token: ctx.token,
+      body: JSON.stringify({
+        field_names: [ctx.nameField, ctx.serialField],
+        filter: {
+          conjunction: "and",
+          conditions: [
+            {
+              field_name: ctx.serialField,
+              operator: "is",
+              value: [serialNumber],
+            },
+          ],
+        },
+      }),
+    }
+  );
+
+  const match = (body.data?.items ?? []).find((record) => {
+    const id = record.record_id || record.id || "";
+    return id && id !== exceptRecordId;
+  });
+  if (!match) return null;
+  const fields = match.fields ?? {};
+  return {
+    recordId: match.record_id || match.id || "",
+    name: fieldToString(fields[ctx.nameField]) || "(unnamed asset)",
   };
 }
 
