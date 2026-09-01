@@ -14,8 +14,16 @@ export default async function Home() {
   }
 
   return (
-    <div className="flex min-h-full flex-1 flex-col bg-[radial-gradient(900px_circle_at_top,_#5a1a80_0%,_transparent_50%),_#121216]">
-      <AssetUpdater initialPayload={initialPayload} initialError={initialError} />
+    <div className="relative flex min-h-full flex-1 flex-col overflow-hidden bg-[#35204c]">
+      <div className="pointer-events-none absolute inset-0" aria-hidden>
+        <div className="absolute -top-28 -left-24 size-[28rem] rounded-full bg-[#d9cce6]/40 blur-3xl" />
+        <div className="absolute top-[8%] right-[-10rem] size-[34rem] rounded-full bg-[#efe7f6]/30 blur-3xl" />
+        <div className="absolute bottom-[-8rem] left-[22%] size-[26rem] rounded-full bg-[#cbb8dc]/28 blur-3xl" />
+        <div className="absolute top-[45%] left-[55%] size-[18rem] rounded-full bg-[#f4eef8]/20 blur-3xl" />
+      </div>
+      <div className="relative z-10 flex min-h-full flex-1 flex-col">
+        <AssetUpdater initialPayload={initialPayload} initialError={initialError} />
+      </div>
     </div>
   );
 }
