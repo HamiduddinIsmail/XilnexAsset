@@ -126,6 +126,13 @@
   }
   body {
     @apply bg-background text-foreground;
+    background-color: #35204c;
+    background-image:
+      radial-gradient(ellipse 42rem 34rem at 6% -8%, rgb(230 218 242 / 0.58), transparent 64%),
+      radial-gradient(ellipse 48rem 36rem at 102% 8%, rgb(246 240 252 / 0.4), transparent 66%),
+      radial-gradient(ellipse 38rem 30rem at 28% 112%, rgb(206 188 226 / 0.36), transparent 62%),
+      radial-gradient(ellipse 26rem 26rem at 70% 52%, rgb(255 255 255 / 0.14), transparent 70%);
+    background-attachment: fixed;
   }
   html {
     @apply font-sans;
