@@ -222,7 +222,7 @@ export function AssetUpdater({
               className="size-12 rounded-xl bg-white shadow-sm ring-1 ring-foreground/10"
             />
             <div className="space-y-1">
-              <p className="text-sm font-medium tracking-wide text-[var(--brand)]">
+              <p className="text-sm font-medium tracking-wide text-white/90">
                 Xilnex Holdings
               </p>
               <h1 className="font-heading text-2xl font-semibold tracking-tight sm:text-3xl">
@@ -237,7 +237,14 @@ export function AssetUpdater({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {payload ? (
-            <Badge variant={payload.mode === "lark" ? "default" : "secondary"}>
+            <Badge
+              className={
+                payload.mode === "lark"
+                  ? "border-transparent bg-[var(--brand)] text-white"
+                  : undefined
+              }
+              variant={payload.mode === "lark" ? "default" : "secondary"}
+            >
               {payload.mode === "lark" ? "Lark Base connected" : "Demo mode"}
             </Badge>
           ) : null}

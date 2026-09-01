@@ -14,7 +14,7 @@ export default async function Home() {
   }
 
   return (
-    <div className="flex min-h-full flex-1 flex-col bg-[radial-gradient(1200px_circle_at_top,_oklch(0.96_0.02_220),_transparent_55%)]">
+    <div className="flex min-h-full flex-1 flex-col bg-[radial-gradient(900px_circle_at_top,_#5a1a80_0%,_transparent_50%),_#121216]">
       <AssetUpdater initialPayload={initialPayload} initialError={initialError} />
     </div>
   );
