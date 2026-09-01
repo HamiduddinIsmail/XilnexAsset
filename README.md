@@ -6,19 +6,34 @@ A small web app for writing asset serial numbers into a Lark Base **Asset Regist
 2. Scan a barcode / QR code with the camera, take a photo of a printed serial, or use a USB / Bluetooth scanner.
 3. Review the value, then submit. The app updates only that record’s serial field.
 
-Until Lark credentials are added, the app runs in **demo mode** against a sample Asset Register so you can try the flow immediately.
+Until a Base is connected, the app runs in **demo mode** against a sample Asset Register so you can try the flow immediately.
 
 ## Run locally
 
 ```bash
 npm install
-cp .env.example .env.local
 npm run dev
 ```
 
 Open [http://127.0.0.1:43123](http://127.0.0.1:43123).
 
-## Connect Lark Base
+## Connect Lark Base (admin)
+
+Admins connect a Base from the app. No `.env` edit is required after that.
+
+1. Open **Setup** (gear) on the scanner page, or go to `/setup`.
+2. Paste:
+   - **App ID** and **App Secret** from a Lark custom app
+   - The **Lark Base link** copied from the browser while the Asset Register table is open
+3. Tap **Test and save**. The app checks that it can read the table, then stores the connection on the server.
+
+Every phone and desktop using this server then talks to that Base. Saving again replaces the connection for everyone.
+
+Leave App ID and Secret blank if you only want to point at a different Base with the same app.
+
+Saved credentials live in `data/lark-settings.json` (not committed). That file overrides `.env.local`.
+
+### Custom app checklist
 
 Create a custom app in the [Lark Developer Console](https://open.larksuite.com/app) (or [Feishu](https://open.feishu.cn/app) if you use Feishu in China).
 
@@ -28,33 +43,26 @@ Create a custom app in the [Lark Developer Console](https://open.larksuite.com/a
    - `base:record:update` (update a record)  
    or the broader `bitable:app` scope.
 3. Publish a version of the app so the scopes take effect.
-4. Open your Asset Register Base → **…** → **Add application** / collaborate, and grant the app **edit** access. API calls fail if the app is not a collaborator.
-5. Copy the Base token from the URL:
+4. Open your Asset Register Base → **…** → **Add application** / collaborate, and grant the app **edit** access. The test fails if the app is not a collaborator.
+5. Copy the browser URL while the Asset Register is open:
 
    `https://<tenant>.larksuite.com/base/<APP_TOKEN>?table=<TABLE_ID>`
 
-   If the Base lives in Wiki, open the Base itself (not the wiki page) and copy the `/base/` token, or set `LARK_APP_TOKEN` to the wiki token (`wik…`) and the app will resolve it.
+   Wiki links (`/wiki/…`) are resolved automatically when possible.
 
-Put those values in `.env.local`:
+The table is detected by the `table=` query, or by a name that looks like **Asset Register**. Field names are auto-detected (`Asset Name`, `Serial Number`, `SN`, `序列号`, …).
 
-```bash
-LARK_APP_ID=cli_xxx
-LARK_APP_SECRET=xxx
-LARK_APP_TOKEN=basxxx
-LARK_TABLE_NAME=Asset Register
-LARK_ASSET_NAME_FIELD=Asset Name
-LARK_SERIAL_NUMBER_FIELD=Serial Number
-```
+### Optional env fallback
 
-`LARK_TABLE_ID` is optional if the table is named **Asset Register**. Field names are optional too: the app looks for common names such as `Asset Name`, `Serial Number`, `SN`, `序列号`.
+You can still put credentials in `.env.local` (see `.env.example`). They are used only when no Setup save exists. Restart `npm run dev` after changing env vars.
 
-Feishu China tenants should set:
+Feishu China tenants should use a `feishu.cn` Base link (API host is inferred) or set:
 
 ```bash
 LARK_API_BASE=https://open.feishu.cn
 ```
 
-Restart `npm run dev` after changing env vars.
+Anyone who can open `/setup` can change the connection. Run this app on a trusted network.
 
 ## Scanning
 

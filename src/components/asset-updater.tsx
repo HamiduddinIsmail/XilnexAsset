@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   AlertTriangle,
   Barcode,
@@ -10,6 +11,7 @@ import {
   RefreshCw,
   ScanLine,
   Search,
+  Settings,
   Usb,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -17,7 +19,7 @@ import { toast } from "sonner";
 import { ScanDialog } from "@/components/scan-dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -260,6 +262,16 @@ export function AssetUpdater({
               {payload.mode === "lark" ? "Lark Base connected" : "Demo mode"}
             </Badge>
           ) : null}
+          <Link
+            href="/setup"
+            className={buttonVariants({
+              variant: payload?.mode === "lark" ? "outline" : "default",
+              size: "sm",
+            })}
+          >
+            <Settings className="size-3.5" />
+            Setup
+          </Link>
           <Button
             variant="outline"
             size="sm"
@@ -279,7 +291,12 @@ export function AssetUpdater({
         <Alert>
           <AlertTriangle />
           <AlertTitle>Running against demo data</AlertTitle>
-          <AlertDescription>{payload.warning}</AlertDescription>
+          <AlertDescription>
+            {payload.warning}{" "}
+            <Link href="/setup" className="font-medium underline underline-offset-4">
+              Open Setup
+            </Link>
+          </AlertDescription>
         </Alert>
       ) : null}
 

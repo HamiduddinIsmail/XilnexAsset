@@ -35,6 +35,9 @@ yarn-error.log*
 .env*
 !.env.example
 
+# Lark App Secret saved from the Setup page
+/data/
+
 # vercel
 .vercel
 

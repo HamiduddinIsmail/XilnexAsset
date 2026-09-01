@@ -15,7 +15,7 @@ export async function getAssets(): Promise<AssetsPayload> {
     return assetsCache.data;
   }
 
-  if (!isLarkConfigured()) {
+  if (!(await isLarkConfigured())) {
     const data: AssetsPayload = {
       mode: "demo",
       tableName: "Asset Register",
@@ -23,7 +23,7 @@ export async function getAssets(): Promise<AssetsPayload> {
       serialField: "Serial Number",
       assets: listMockAssets(),
       warning:
-        "Demo mode is on because Lark credentials are not configured. Updates stay in this server until you add them.",
+        "Demo mode is on because no Lark Base is connected yet. Open Setup, paste the App ID, App Secret, and Base link, then scanners on every device will use that table.",
     };
     assetsCache = { at: Date.now(), data };
     return data;
@@ -47,7 +47,7 @@ export async function submitSerial(
     throw new Error("That does not look like a serial number. Check the value before submitting.");
   }
 
-  if (isLarkConfigured()) {
+  if (await isLarkConfigured()) {
     const duplicate = await findAssetWithSerial(serialNumber, recordId);
     if (duplicate) {
       throw new Error(

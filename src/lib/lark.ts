@@ -1,4 +1,5 @@
 import { fieldToString, normalizeKey } from "@/lib/field-value";
+import { maskAppId, readStoredSettings } from "@/lib/settings";
 import type { AssetMeta } from "@/lib/types";
 
 type LarkRecord = {
@@ -52,27 +53,87 @@ const EXTRA_CANDIDATES = [
   "type",
 ];
 
+type RuntimeConfig = {
+  appId: string;
+  appSecret: string;
+  apiBase: string;
+  appToken: string;
+  tableId: string;
+  baseUrl: string;
+  tableName: string;
+  assetNameField: string;
+  serialNumberField: string;
+  source: "file" | "env";
+};
+
 let tokenCache: TokenCache | null = null;
 let contextCache: { at: number; value: Awaited<ReturnType<typeof buildLarkContext>> } | null = null;
+let runtimeConfig: RuntimeConfig | null | undefined;
 const CONTEXT_TTL_MS = 5 * 60_000;
 
-export function isLarkConfigured(): boolean {
-  return Boolean(
-    process.env.LARK_APP_ID?.trim() &&
-      process.env.LARK_APP_SECRET?.trim() &&
-      (process.env.LARK_APP_TOKEN?.trim() || process.env.LARK_BASE_URL?.trim())
-  );
+export function resetLarkRuntime() {
+  tokenCache = null;
+  contextCache = null;
+  runtimeConfig = undefined;
+}
+
+export async function isLarkConfigured(): Promise<boolean> {
+  return Boolean(await loadRuntimeConfig());
+}
+
+async function loadRuntimeConfig(): Promise<RuntimeConfig | null> {
+  if (runtimeConfig !== undefined) return runtimeConfig;
+
+  const stored = await readStoredSettings();
+  if (stored) {
+    runtimeConfig = {
+      appId: stored.appId,
+      appSecret: stored.appSecret,
+      apiBase: stored.apiBase,
+      appToken: stored.appToken,
+      tableId: stored.tableId,
+      baseUrl: stored.baseUrl,
+      tableName: stored.tableName || "Asset Register",
+      assetNameField: stored.assetNameField || "",
+      serialNumberField: stored.serialNumberField || "",
+      source: "file",
+    };
+    return runtimeConfig;
+  }
+
+  const appId = process.env.LARK_APP_ID?.trim() ?? "";
+  const appSecret = process.env.LARK_APP_SECRET?.trim() ?? "";
+  const baseUrl = process.env.LARK_BASE_URL?.trim() ?? "";
+  const fromUrl = baseUrl ? tokenFromBaseUrl(baseUrl) : {};
+  const appToken = process.env.LARK_APP_TOKEN?.trim() || fromUrl.appToken || "";
+  if (!appId || !appSecret || !appToken) {
+    runtimeConfig = null;
+    return null;
+  }
+
+  runtimeConfig = {
+    appId,
+    appSecret,
+    apiBase:
+      process.env.LARK_API_BASE?.trim().replace(/\/$/, "") ||
+      "https://open.larksuite.com",
+    appToken,
+    tableId: process.env.LARK_TABLE_ID?.trim() || fromUrl.tableId || "",
+    baseUrl,
+    tableName: process.env.LARK_TABLE_NAME?.trim() || "Asset Register",
+    assetNameField: process.env.LARK_ASSET_NAME_FIELD?.trim() || "",
+    serialNumberField: process.env.LARK_SERIAL_NUMBER_FIELD?.trim() || "",
+    source: "env",
+  };
+  return runtimeConfig;
 }
 
 function apiBase(): string {
   return (
+    runtimeConfig?.apiBase ||
     process.env.LARK_API_BASE?.trim().replace(/\/$/, "") ||
     "https://open.larksuite.com"
   );
-}
-
-function env(name: string): string {
-  return process.env[name]?.trim() ?? "";
 }
 
 async function larkFetch<T>(
@@ -118,14 +179,19 @@ async function getTenantToken(): Promise<string> {
     return tokenCache.token;
   }
 
+  const config = await loadRuntimeConfig();
+  if (!config) {
+    throw new Error("Lark is not configured. Open Setup and add your app credentials and Base link.");
+  }
+
   const body = await larkFetch<{
     tenant_access_token?: string;
     expire?: number;
   }>("/open-apis/auth/v3/tenant_access_token/internal", {
     method: "POST",
     body: JSON.stringify({
-      app_id: env("LARK_APP_ID"),
-      app_secret: env("LARK_APP_SECRET"),
+      app_id: config.appId,
+      app_secret: config.appSecret,
     }),
   });
 
@@ -280,23 +346,20 @@ export async function resolveLarkContext() {
 }
 
 async function buildLarkContext() {
-  const token = await getTenantToken();
-  const fromUrl = env("LARK_BASE_URL") ? tokenFromBaseUrl(env("LARK_BASE_URL")) : {};
-  const rawAppToken = env("LARK_APP_TOKEN") || fromUrl.appToken || "";
-  if (!rawAppToken) {
-    throw new Error("Set LARK_APP_TOKEN or LARK_BASE_URL so the app can find your Base.");
+  const config = await loadRuntimeConfig();
+  if (!config) {
+    throw new Error("Lark is not configured. Open Setup and add your app credentials and Base link.");
   }
-
-  const appToken = await resolveAppToken(token, rawAppToken);
+  const token = await getTenantToken();
+  const appToken = await resolveAppToken(token, config.appToken);
   const tables = await listTables(token, appToken);
   if (tables.length === 0) {
     throw new Error("No tables were found in this Base. Check that the app is a collaborator.");
   }
 
-  const configuredTableId = env("LARK_TABLE_ID") || fromUrl.tableId || "";
-  const configuredTableName = env("LARK_TABLE_NAME") || "Asset Register";
+  const configuredTableName = config.tableName || "Asset Register";
   const table =
-    tables.find((item) => item.table_id === configuredTableId) ??
+    tables.find((item) => item.table_id === config.tableId) ??
     tables.find(
       (item) => normalizeKey(item.name ?? "") === normalizeKey(configuredTableName)
     ) ??
@@ -316,12 +379,8 @@ async function buildLarkContext() {
   }
 
   const fields = await listFields(token, appToken, table.table_id);
-  const nameField = pickField(fields, env("LARK_ASSET_NAME_FIELD"), NAME_CANDIDATES);
-  const serialField = pickField(
-    fields,
-    env("LARK_SERIAL_NUMBER_FIELD"),
-    SERIAL_CANDIDATES
-  );
+  const nameField = pickField(fields, config.assetNameField, NAME_CANDIDATES);
+  const serialField = pickField(fields, config.serialNumberField, SERIAL_CANDIDATES);
   const extraFields = pickExtraFields(fields, [nameField, serialField]);
 
   return {
@@ -331,6 +390,54 @@ async function buildLarkContext() {
     nameField,
     serialField,
     extraFields,
+  };
+}
+
+export async function verifyLarkSettings(input: {
+  appId: string;
+  appSecret: string;
+  apiBase: string;
+  appToken: string;
+  tableId: string;
+  tableName: string;
+}): Promise<{ tableId: string; tableName: string; nameField: string; serialField: string }> {
+  resetLarkRuntime();
+  runtimeConfig = {
+    appId: input.appId,
+    appSecret: input.appSecret,
+    apiBase: input.apiBase,
+    appToken: input.appToken,
+    tableId: input.tableId,
+    baseUrl: "",
+    tableName: input.tableName,
+    assetNameField: "",
+    serialNumberField: "",
+    source: "file",
+  };
+  try {
+    const ctx = await buildLarkContext();
+    return {
+      tableId: ctx.tableId,
+      tableName: ctx.tableName,
+      nameField: ctx.nameField,
+      serialField: ctx.serialField,
+    };
+  } finally {
+    resetLarkRuntime();
+  }
+}
+
+export async function publicConnectionInfo() {
+  const config = await loadRuntimeConfig();
+  if (!config) {
+    return { configured: false as const, source: "none" as const };
+  }
+  return {
+    configured: true as const,
+    source: config.source,
+    appIdMasked: maskAppId(config.appId),
+    baseUrl: config.baseUrl,
+    tableName: config.tableName,
   };
 }
 
