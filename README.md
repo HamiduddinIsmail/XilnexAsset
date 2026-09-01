@@ -66,8 +66,8 @@ Anyone who can open `/setup` can change the connection. Run this app on a truste
 
 ## Scanning
 
-- **Phone camera:** tap **Scan barcode or photo**, point at Code 128, Code 39, QR, EAN, UPC, Data Matrix, or PDF417.
-- **Photo of a printed serial:** take or upload a picture. If there is no barcode, the app reads the text and offers candidates.
+- **Phone camera:** tap **Scan barcode or photo**. The viewfinder is large, and the app reads the full camera feed (not just a tiny crop). On phones that support it, use **Torch** and **Zoom**, or tap **Read this frame** to decode a still at full resolution.
+- **Photo of a printed serial:** take or upload a picture. If there is no barcode, the app boosts contrast and reads the text.
 - **USB / Bluetooth wedge scanner:** select an asset, then scan. The scanner types the value into the app automatically.
 
 Submit is blocked if another asset already has that serial.
