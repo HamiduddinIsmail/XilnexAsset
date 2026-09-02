@@ -37,6 +37,10 @@ export function SetupForm() {
   const [current, setCurrent] = useState<SettingsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [currentPin, setCurrentPin] = useState("");
+  const [newPin, setNewPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
+  const [savingPin, setSavingPin] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,6 +86,27 @@ export function SetupForm() {
       toast.error(error instanceof Error ? error.message : "Could not save setup.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function onChangePin() {
+    setSavingPin(true);
+    try {
+      const response = await fetch("/api/pin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPin, newPin, confirmPin }),
+      });
+      const body = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(body.error || "Could not change PIN.");
+      toast.success("PIN updated.");
+      setCurrentPin("");
+      setNewPin("");
+      setConfirmPin("");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not change PIN.");
+    } finally {
+      setSavingPin(false);
     }
   }
 
@@ -174,6 +199,64 @@ export function SetupForm() {
           >
             {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
             Test and save
+          </Button>
+        </CardFooter>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Change PIN</CardTitle>
+          <CardDescription>
+            Anyone with this PIN can update serials and maintenance. Keep it to your team.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-3">
+          <div className="space-y-2">
+            <Label htmlFor="currentPin">Current PIN</Label>
+            <Input
+              id="currentPin"
+              inputMode="numeric"
+              maxLength={4}
+              value={currentPin}
+              onChange={(event) => setCurrentPin(event.target.value.replace(/\D/g, "").slice(0, 4))}
+              className="h-11 font-mono tracking-[0.4em]"
+              autoComplete="off"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="newPin">New PIN</Label>
+            <Input
+              id="newPin"
+              inputMode="numeric"
+              maxLength={4}
+              value={newPin}
+              onChange={(event) => setNewPin(event.target.value.replace(/\D/g, "").slice(0, 4))}
+              className="h-11 font-mono tracking-[0.4em]"
+              autoComplete="off"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="confirmPin">Confirm</Label>
+            <Input
+              id="confirmPin"
+              inputMode="numeric"
+              maxLength={4}
+              value={confirmPin}
+              onChange={(event) => setConfirmPin(event.target.value.replace(/\D/g, "").slice(0, 4))}
+              className="h-11 font-mono tracking-[0.4em]"
+              autoComplete="off"
+            />
+          </div>
+        </CardContent>
+        <CardFooter className="justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={savingPin || currentPin.length !== 4 || newPin.length !== 4 || confirmPin.length !== 4}
+            onClick={() => void onChangePin()}
+          >
+            {savingPin ? <Loader2 className="size-4 animate-spin" /> : null}
+            Update PIN
           </Button>
         </CardFooter>
       </Card>

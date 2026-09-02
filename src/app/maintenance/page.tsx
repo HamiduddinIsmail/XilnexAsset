@@ -1,9 +1,11 @@
 import { MaintenanceDesk } from "@/components/maintenance-desk";
+import { requirePageSession } from "@/lib/guard";
 import { getMaintenanceJobs } from "@/lib/maintenance";
 
 export const dynamic = "force-dynamic";
 
 export default async function MaintenancePage() {
+  await requirePageSession();
   let initialPayload = null;
   let initialError: string | null = null;
 

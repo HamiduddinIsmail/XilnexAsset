@@ -1,3 +1,4 @@
+import { requireApiSession } from "@/lib/guard";
 import { advanceMaintenance, previewChanges } from "@/lib/maintenance";
 
 export const dynamic = "force-dynamic";
@@ -6,6 +7,8 @@ export async function POST(
   _request: Request,
   context: { params: Promise<{ recordId: string }> }
 ) {
+  const denied = await requireApiSession();
+  if (denied) return denied;
   try {
     const { recordId } = await context.params;
     const result = await advanceMaintenance(recordId);

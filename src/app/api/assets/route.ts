@@ -1,8 +1,11 @@
 import { getAssets, invalidateAssetsCache } from "@/lib/assets";
+import { requireApiSession } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
+  const denied = await requireApiSession();
+  if (denied) return denied;
   try {
     const fresh = new URL(request.url).searchParams.get("fresh");
     if (fresh) invalidateAssetsCache();

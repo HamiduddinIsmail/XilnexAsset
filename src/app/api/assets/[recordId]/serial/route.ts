@@ -1,4 +1,5 @@
 import { submitSerial } from "@/lib/assets";
+import { requireApiSession } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -6,6 +7,8 @@ export async function PUT(
   request: Request,
   context: { params: Promise<{ recordId: string }> }
 ) {
+  const denied = await requireApiSession();
+  if (denied) return denied;
   try {
     const { recordId } = await context.params;
     const body = (await request.json()) as { serialNumber?: string };

@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { ClipboardList, Settings, Tag } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { ClipboardList, Lock, Settings, Tag } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -14,6 +14,13 @@ const LINKS = [
 
 export function AppNav() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  async function lock() {
+    await fetch("/api/unlock", { method: "DELETE" });
+    router.replace("/welcome");
+    router.refresh();
+  }
 
   return (
     <nav className="flex flex-wrap items-center gap-2">
@@ -44,6 +51,14 @@ export function AppNav() {
         <Settings className="size-3.5" />
         Setup
       </Link>
+      <button
+        type="button"
+        onClick={() => void lock()}
+        className={buttonVariants({ variant: "outline", size: "sm" })}
+      >
+        <Lock className="size-3.5" />
+        Lock
+      </button>
     </nav>
   );
 }

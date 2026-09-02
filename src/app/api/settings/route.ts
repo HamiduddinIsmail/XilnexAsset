@@ -1,4 +1,5 @@
 import { invalidateAssetsCache } from "@/lib/assets";
+import { requireApiSession } from "@/lib/guard";
 import { publicConnectionInfo, resetLarkRuntime, verifyLarkSettings } from "@/lib/lark";
 import {
   maskAppId,
@@ -10,6 +11,8 @@ import {
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const denied = await requireApiSession();
+  if (denied) return denied;
   const stored = await readStoredSettings();
   const live = await publicConnectionInfo();
   return Response.json({
@@ -21,6 +24,8 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
+  const denied = await requireApiSession();
+  if (denied) return denied;
   try {
     const body = (await request.json()) as {
       appId?: string;

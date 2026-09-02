@@ -64,6 +64,15 @@ LARK_API_BASE=https://open.feishu.cn
 
 Anyone who can open `/setup` can change the connection. Run this app on a trusted network.
 
+## PIN lock
+
+The first visit opens a welcome screen. Create a **4-digit PIN**. After that, the link alone cannot read or change Lark data.
+
+- Enter the PIN to unlock Serials, Maintenance, and Setup for 12 hours on that browser.
+- Tap **Lock** in the header when you walk away.
+- Change the PIN later in **Setup**.
+- If the PIN is forgotten, delete `data/app-lock.json` on the server and create a new one.
+
 ## Maintenance desk
 
 Open **Maintenance** in the header. It lists **3. Maintenance Log** jobs that are **Open** or **In Progress**.
