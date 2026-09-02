@@ -138,9 +138,9 @@ function apiBase(): string {
 
 async function larkFetch<T>(
   path: string,
-  init: RequestInit & { token?: string } = {}
+  init: RequestInit & { token?: string; retried?: boolean } = {}
 ): Promise<T> {
-  const { token, ...rest } = init;
+  const { token, retried, ...rest } = init;
   const headers = new Headers(rest.headers);
   headers.set("Content-Type", "application/json; charset=utf-8");
   if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -167,8 +167,17 @@ async function larkFetch<T>(
   }
 
   if (!response.ok || (typeof body.code === "number" && body.code !== 0)) {
+    if (body.code === 99991663 && token && !retried) {
+      tokenCache = null;
+      const fresh = await getTenantToken();
+      return larkFetch<T>(path, { ...rest, token: fresh, retried: true });
+    }
     const detail = body.msg || body.error?.message || response.statusText;
-    throw new Error(`Lark API error${body.code != null ? ` ${body.code}` : ""}: ${detail}`);
+    const message =
+      body.code === 99991663
+        ? "Lark session expired. Tap Refresh, or open Setup and Test and save again."
+        : `Lark API error${body.code != null ? ` ${body.code}` : ""}: ${detail}`;
+    throw new Error(message);
   }
 
   return body;
@@ -599,17 +608,37 @@ export async function searchTableRecords(
   return records;
 }
 
+export async function getTableRecords(
+  token: string,
+  appToken: string,
+  tableId: string,
+  recordIds: string[]
+) {
+  const unique = [...new Set(recordIds.filter(Boolean))];
+  const records: LarkRecord[] = [];
+  for (let index = 0; index < unique.length; index += 100) {
+    const chunk = unique.slice(index, index + 100);
+    const body = await larkFetch<{ data?: { records?: LarkRecord[] } }>(
+      `/open-apis/bitable/v1/apps/${appToken}/tables/${tableId}/records/batch_get`,
+      {
+        method: "POST",
+        token,
+        body: JSON.stringify({ record_ids: chunk }),
+      }
+    );
+    records.push(...(body.data?.records ?? []));
+  }
+  return records;
+}
+
 export async function getTableRecord(
   token: string,
   appToken: string,
   tableId: string,
   recordId: string
 ) {
-  const body = await larkFetch<{ data?: { record?: LarkRecord } }>(
-    `/open-apis/bitable/v1/apps/${appToken}/tables/${tableId}/records/${recordId}`,
-    { method: "GET", token }
-  );
-  return body.data?.record ?? null;
+  const records = await getTableRecords(token, appToken, tableId, [recordId]);
+  return records[0] ?? null;
 }
 
 export async function updateTableRecord(

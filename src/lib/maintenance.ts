@@ -3,6 +3,7 @@ import { fieldToString, linkRecordIds, normalizeKey } from "@/lib/field-value";
 import {
   getLarkSession,
   getTableRecord,
+  getTableRecords,
   isLarkConfigured,
   listTableFieldNames,
   pickField,
@@ -155,12 +156,12 @@ async function resolveMaintenanceContext(): Promise<MaintenanceContext> {
 async function loadLinkedAssets(ctx: MaintenanceContext, assetIds: string[]) {
   const unique = [...new Set(assetIds.filter(Boolean))];
   const map = new Map<string, Record<string, unknown>>();
-  await Promise.all(
-    unique.map(async (recordId) => {
-      const record = await getTableRecord(ctx.token, ctx.appToken, ctx.assetTableId, recordId);
-      map.set(recordId, record?.fields ?? {});
-    })
-  );
+  if (unique.length === 0) return map;
+  const records = await getTableRecords(ctx.token, ctx.appToken, ctx.assetTableId, unique);
+  for (const record of records) {
+    const id = record.record_id || record.id || "";
+    if (id) map.set(id, record.fields ?? {});
+  }
   return map;
 }
 
