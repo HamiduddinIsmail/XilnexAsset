@@ -64,6 +64,18 @@ LARK_API_BASE=https://open.feishu.cn
 
 Anyone who can open `/setup` can change the connection. Run this app on a trusted network.
 
+## Maintenance desk
+
+Open **Maintenance** in the header. It lists **3. Maintenance Log** jobs that are **Open** or **In Progress**.
+
+1. Review Open jobs (repair or disposal).
+2. When you send the asset out, scan its serial (or tap **Send to repair**). Status becomes **In Progress**, and a repair job sets the asset to **In Repair**.
+3. When the repair is done, scan the same serial. Status becomes **Completed**, condition after maintenance is **Good**, the asset condition is **Good**, and current status is **Available** if there is no Current Assignee (otherwise **Assigned**).
+
+Disposal jobs can be started and completed the same way, but completing disposal does not set the asset back to Available or Good.
+
+If the asset has no serial yet, use the button on the job row instead of scanning.
+
 ## Scanning
 
 - **Phone camera:** tap **Scan barcode or photo**. The viewfinder is large, and the app reads the full camera feed (not just a tiny crop). On phones that support it, use **Torch** and **Zoom**, or tap **Read this frame** to decode a still at full resolution.

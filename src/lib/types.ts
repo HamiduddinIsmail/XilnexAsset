@@ -23,3 +23,37 @@ export type UpdateSerialResult = {
   previousSerial: string;
   serialNumber: string;
 };
+
+export type MaintenanceAction = "start" | "complete";
+
+export type MaintenanceJob = {
+  recordId: string;
+  maintenanceId: string;
+  type: string;
+  status: string;
+  priority: string;
+  issue: string;
+  assetRecordId: string;
+  assetId: string;
+  assetName: string;
+  serialNumber: string;
+  currentStatus: string;
+  assetCondition: string;
+  assignee: string;
+  nextAction: MaintenanceAction | null;
+};
+
+export type MaintenancePayload = {
+  mode: ConnectionMode;
+  tableName: string;
+  jobs: MaintenanceJob[];
+  warning?: string;
+};
+
+export type MaintenanceAdvanceResult = {
+  mode: ConnectionMode;
+  action: MaintenanceAction;
+  job: MaintenanceJob;
+  summary: string;
+  changes: string[];
+};

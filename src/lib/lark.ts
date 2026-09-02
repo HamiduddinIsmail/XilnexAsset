@@ -553,3 +553,85 @@ export async function updateLarkSerial(recordId: string, serialNumber: string) {
     serialField: ctx.serialField,
   };
 }
+
+export async function getLarkSession() {
+  const config = await loadRuntimeConfig();
+  if (!config) return null;
+  const token = await getTenantToken();
+  const appToken = await resolveAppToken(token, config.appToken);
+  const tables = await listTables(token, appToken);
+  return { config, token, appToken, tables };
+}
+
+export async function searchTableRecords(
+  token: string,
+  appToken: string,
+  tableId: string,
+  options: { fieldNames?: string[]; filter?: unknown } = {}
+) {
+  const records: LarkRecord[] = [];
+  let pageToken = "";
+
+  do {
+    const query = new URLSearchParams({ page_size: "500" });
+    if (pageToken) query.set("page_token", pageToken);
+    const body = await larkFetch<{
+      data?: {
+        items?: LarkRecord[];
+        has_more?: boolean;
+        page_token?: string;
+      };
+    }>(
+      `/open-apis/bitable/v1/apps/${appToken}/tables/${tableId}/records/search?${query}`,
+      {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          ...(options.fieldNames?.length ? { field_names: options.fieldNames } : {}),
+          ...(options.filter ? { filter: options.filter } : {}),
+        }),
+      }
+    );
+    records.push(...(body.data?.items ?? []));
+    pageToken = body.data?.has_more ? (body.data.page_token ?? "") : "";
+  } while (pageToken);
+
+  return records;
+}
+
+export async function getTableRecord(
+  token: string,
+  appToken: string,
+  tableId: string,
+  recordId: string
+) {
+  const body = await larkFetch<{ data?: { record?: LarkRecord } }>(
+    `/open-apis/bitable/v1/apps/${appToken}/tables/${tableId}/records/${recordId}`,
+    { method: "GET", token }
+  );
+  return body.data?.record ?? null;
+}
+
+export async function updateTableRecord(
+  token: string,
+  appToken: string,
+  tableId: string,
+  recordId: string,
+  fields: Record<string, unknown>
+) {
+  await larkFetch(`/open-apis/bitable/v1/apps/${appToken}/tables/${tableId}/records/${recordId}`, {
+    method: "PUT",
+    token,
+    body: JSON.stringify({ fields }),
+  });
+}
+
+export async function listTableNames(token: string, appToken: string) {
+  return listTables(token, appToken);
+}
+
+export async function listTableFieldNames(token: string, appToken: string, tableId: string) {
+  return listFields(token, appToken, tableId);
+}
+
+export { pickField };

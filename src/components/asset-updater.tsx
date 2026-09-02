@@ -11,15 +11,15 @@ import {
   RefreshCw,
   ScanLine,
   Search,
-  Settings,
   Usb,
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { AppNav } from "@/components/app-nav";
 import { ScanDialog } from "@/components/scan-dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -262,16 +262,7 @@ export function AssetUpdater({
               {payload.mode === "lark" ? "Lark Base connected" : "Demo mode"}
             </Badge>
           ) : null}
-          <Link
-            href="/setup"
-            className={buttonVariants({
-              variant: payload?.mode === "lark" ? "outline" : "default",
-              size: "sm",
-            })}
-          >
-            <Settings className="size-3.5" />
-            Setup
-          </Link>
+          <AppNav />
           <Button
             variant="outline"
             size="sm"
