@@ -17,6 +17,24 @@ npm run dev
 
 Open [http://127.0.0.1:43123](http://127.0.0.1:43123).
 
+## Deploy to Netlify
+
+This is a Next.js app. Netlify detects that and runs the OpenNext adapter automatically.
+
+1. Put the project on GitHub, GitLab, or Bitbucket. If this Cursor project has no GitHub repo yet, click **Create repo**, then connect that repo.
+2. In [Netlify](https://app.netlify.com): **Add new site → Import an existing project** and pick the repo.
+3. Leave the defaults (`npm run build`, publish `.next`, Node 22 from `netlify.toml`).
+4. Click **Deploy**.
+5. Open `https://<site>.netlify.app`. Create the 4-digit PIN, then **Setup** with App ID, App Secret, and the Lark Base link.
+
+HTTPS on Netlify is what the phone camera needs. PIN and Lark settings are stored in Netlify Blobs (not in git), so they survive deploys.
+
+You do **not** have to paste secrets into Netlify environment variables unless you want a fallback. Optional env names are in `.env.example`.
+
+If you forget the PIN on Netlify, unlock is impossible until you delete the `app-lock` blob in **Site configuration → Blobs** (store `xilnex-asset-app`) and create a new PIN.
+
+## Connect Lark Base (admin)
+
 ## Connect Lark Base (admin)
 
 Admins connect a Base from the app. No `.env` edit is required after that.
@@ -71,7 +89,7 @@ The first visit opens a welcome screen. Create a **4-digit PIN**. After that, th
 - Enter the PIN to unlock Serials, Maintenance, and Setup for 12 hours on that browser.
 - Tap **Lock** in the header when you walk away.
 - Change the PIN later in **Setup**.
-- If the PIN is forgotten, delete `data/app-lock.json` on the server and create a new one.
+- If the PIN is forgotten locally, delete `data/app-lock.json` and create a new one. On Netlify, delete the `app-lock` blob instead.
 
 ## Maintenance desk
 

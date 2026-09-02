@@ -1,5 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { readJsonFile, writeJsonFile } from "@/lib/persist";
 
 export type StoredLarkSettings = {
   appId: string;
@@ -19,8 +18,6 @@ export type ParsedBaseLink = {
   appToken: string;
   tableId: string;
 };
-
-const SETTINGS_PATH = path.join(process.cwd(), "data", "lark-settings.json");
 
 export function parseBaseLink(raw: string): ParsedBaseLink {
   let url: URL;
@@ -46,22 +43,13 @@ export function parseBaseLink(raw: string): ParsedBaseLink {
 }
 
 export async function readStoredSettings(): Promise<StoredLarkSettings | null> {
-  try {
-    const raw = await readFile(SETTINGS_PATH, "utf8");
-    const parsed = JSON.parse(raw) as StoredLarkSettings;
-    if (!parsed.appId || !parsed.appSecret || !parsed.appToken) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
+  const parsed = await readJsonFile<StoredLarkSettings>("lark-settings");
+  if (!parsed?.appId || !parsed.appSecret || !parsed.appToken) return null;
+  return parsed;
 }
 
 export async function writeStoredSettings(settings: StoredLarkSettings) {
-  await mkdir(path.dirname(SETTINGS_PATH), { recursive: true });
-  await writeFile(SETTINGS_PATH, `${JSON.stringify(settings, null, 2)}\n`, {
-    encoding: "utf8",
-    mode: 0o600,
-  });
+  await writeJsonFile("lark-settings", settings);
 }
 
 export function maskAppId(appId: string): string {

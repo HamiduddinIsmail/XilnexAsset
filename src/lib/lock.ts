@@ -1,9 +1,8 @@
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { cookies } from "next/headers";
 
-const LOCK_PATH = path.join(process.cwd(), "data", "app-lock.json");
+import { readJsonFile, writeJsonFile } from "@/lib/persist";
+
 export const SESSION_COOKIE = "xilnex_unlock";
 const SESSION_MS = 12 * 60 * 60 * 1000;
 
@@ -19,21 +18,13 @@ function isFourDigits(pin: string): boolean {
 }
 
 async function readLock(): Promise<LockFile | null> {
-  try {
-    const parsed = JSON.parse(await readFile(LOCK_PATH, "utf8")) as LockFile;
-    if (!parsed.pinHash || !parsed.salt || !parsed.sessionSecret) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
+  const parsed = await readJsonFile<LockFile>("app-lock");
+  if (!parsed?.pinHash || !parsed.salt || !parsed.sessionSecret) return null;
+  return parsed;
 }
 
 async function writeLock(lock: LockFile) {
-  await mkdir(path.dirname(LOCK_PATH), { recursive: true });
-  await writeFile(LOCK_PATH, `${JSON.stringify(lock, null, 2)}\n`, {
-    encoding: "utf8",
-    mode: 0o600,
-  });
+  await writeJsonFile("app-lock", lock);
 }
 
 function hashPin(pin: string, saltHex: string) {
@@ -127,7 +118,7 @@ export async function setSessionCookie() {
     sameSite: "lax",
     path: "/",
     maxAge: Math.floor(SESSION_MS / 1000),
-    secure: false,
+    secure: process.env.NETLIFY === "true",
   });
 }
 

@@ -2,6 +2,9 @@
   "name": "asset-serial-updater",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0 --port 43123",
     "build": "next build",
@@ -10,6 +13,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
+    "@netlify/blobs": "^11.0.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
