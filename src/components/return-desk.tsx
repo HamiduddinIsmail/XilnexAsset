@@ -9,6 +9,7 @@ import {
   Search,
   Trash2,
   Undo2,
+  UserRound,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -42,7 +43,10 @@ import {
   defaultReturnCondition,
   defaultReturnReason,
   describeReturnChanges,
+  holderKeyForAsset,
+  listReturnHolders,
   nextStatusAfterReturn,
+  type ReturnHolder,
 } from "@/lib/return-shared";
 import type { HandoverAsset, ReturnPayload, ReturnResult } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -98,6 +102,56 @@ function ChoiceRow({
   );
 }
 
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+}
+
+function HolderRow({
+  holder,
+  selected,
+  onSelect,
+}: {
+  holder: ReturnHolder;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        "flex w-full items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition-colors",
+        selected
+          ? "border-transparent bg-[var(--brand)] text-white"
+          : "border-border bg-background/40 hover:bg-muted"
+      )}
+    >
+      <span
+        className={cn(
+          "flex size-8 items-center justify-center rounded-full text-xs font-semibold",
+          selected ? "bg-white/20" : "bg-muted"
+        )}
+      >
+        {initials(holder.name)}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-medium">{holder.name}</span>
+        {holder.email ? (
+          <span className={cn("block truncate text-xs", selected ? "text-white/80" : "text-muted-foreground")}>
+            {holder.email}
+          </span>
+        ) : null}
+      </span>
+      <span className={cn("shrink-0 text-xs", selected ? "text-white/90" : "text-muted-foreground")}>
+        {holder.outCount} out
+      </span>
+    </button>
+  );
+}
+
 export function ReturnDesk({
   initialPayload = null,
   initialError = null,
@@ -106,6 +160,8 @@ export function ReturnDesk({
   const [loadError, setLoadError] = useState<string | null>(initialError);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
+  const [holderQuery, setHolderQuery] = useState("");
+  const [holderKey, setHolderKey] = useState("");
   const [filter, setFilter] = useState<StatusFilter>("out");
   const [scanOpen, setScanOpen] = useState(false);
   const [basket, setBasket] = useState<BasketItem[]>([]);
@@ -132,28 +188,62 @@ export function ReturnDesk({
   }
 
   function addAsset(asset: HandoverAsset) {
-    if (asset.blockedReason) {
-      toast.error(asset.blockedReason);
-      return;
-    }
-    if (basket.some((item) => item.asset.recordId === asset.recordId)) {
-      toast.error(`${asset.name} is already in the return list.`);
-      return;
-    }
+    queueAssets([asset], { single: true });
+  }
+
+  function queueAssets(list: HandoverAsset[], options?: { single?: boolean }) {
     const reasons = payload?.options.reasons ?? [];
     const conditions = payload?.options.conditions ?? [];
-    setBasket((items) => [
-      ...items,
-      {
+    const inBasket = new Set(basket.map((item) => item.asset.recordId));
+    const next: BasketItem[] = [];
+    let blockedMessage = "";
+
+    for (const asset of list) {
+      if (inBasket.has(asset.recordId) || next.some((item) => item.asset.recordId === asset.recordId)) {
+        if (options?.single) {
+          toast.error(`${asset.name} is already in the return list.`);
+          return;
+        }
+        continue;
+      }
+      if (asset.blockedReason) {
+        if (options?.single) {
+          toast.error(asset.blockedReason);
+          return;
+        }
+        blockedMessage = asset.blockedReason;
+        continue;
+      }
+      next.push({
         asset,
         reason: defaultReturnReason(reasons),
         condition: defaultReturnCondition(asset, conditions),
-      },
-    ]);
-    if (!location) setLocation(asset.location || payload?.options.locations[0] || "");
+      });
+    }
+
+    if (!next.length) {
+      toast.error(
+        blockedMessage ||
+          (options?.single ? "Could not add that asset." : "Nothing left to add for this person.")
+      );
+      return;
+    }
+
+    setBasket((items) => [...items, ...next]);
+    if (!location) setLocation(next[0].asset.location || payload?.options.locations[0] || "");
     setLastResult(null);
-    toast.success(`Added ${asset.name}`);
+    toast.success(next.length === 1 ? `Added ${next[0].asset.name}` : `Added ${next.length} assets`);
   }
+
+  const holders = useMemo(() => listReturnHolders(payload?.assets ?? []), [payload]);
+  const selectedHolder = holders.find((holder) => holder.key === holderKey) ?? null;
+  const visibleHolders = useMemo(() => {
+    const q = holderQuery.trim().toLowerCase();
+    if (!q) return holders;
+    return holders.filter((holder) =>
+      [holder.name, holder.email].join(" ").toLowerCase().includes(q)
+    );
+  }, [holders, holderQuery]);
 
   const assets = useMemo(() => {
     const list = payload?.assets ?? [];
@@ -161,6 +251,7 @@ export function ReturnDesk({
     const inBasket = new Set(basket.map((item) => item.asset.recordId));
     return list.filter((asset) => {
       if (inBasket.has(asset.recordId)) return false;
+      if (holderKey && holderKeyForAsset(asset) !== holderKey) return false;
       if (filter === "out" && asset.blockedReason) return false;
       if (!q) return true;
       return [asset.name, asset.assetId, asset.serialNumber, asset.assigneeName, asset.location]
@@ -168,8 +259,9 @@ export function ReturnDesk({
         .toLowerCase()
         .includes(q);
     });
-  }, [payload, filter, query, basket]);
+  }, [payload, filter, query, basket, holderKey]);
 
+  const addableCount = assets.filter((asset) => !asset.blockedReason).length;
   const outCount = payload?.assets.filter((asset) => !asset.blockedReason).length ?? 0;
 
   async function lookupSerial(serial: string) {
@@ -254,7 +346,7 @@ export function ReturnDesk({
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
       <DeskHeader
         title="Asset return"
-        description="Scan assets that are out with staff. The holder comes from the register. Confirm once to take them back into stock — no Lark Approval form."
+        description="Filter by who holds the assets, or scan a serial. Add one item or a whole staff list, then confirm once."
         mode={payload?.mode}
         loading={loading}
         onRefresh={() => {
@@ -299,17 +391,102 @@ export function ReturnDesk({
               Assets out
             </CardTitle>
             <CardDescription>
-              Scan or tap assigned and loaned assets. Add several before you confirm.
+              {selectedHolder
+                ? `Showing what is with ${selectedHolder.name}. Tap an asset or add all of theirs.`
+                : "Pick a staff member to see what they hold, or scan a serial."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 pt-4">
+            {selectedHolder ? (
+              <div className="flex flex-col gap-2 rounded-xl border bg-background/40 p-2.5 sm:flex-row sm:items-center">
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                  <span className="flex size-9 items-center justify-center rounded-full bg-[var(--brand)] text-xs font-semibold text-white">
+                    {initials(selectedHolder.name)}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{selectedHolder.name}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {[selectedHolder.email, `${addableCount} still out`].filter(Boolean).join(" · ")}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setHolderKey("");
+                      setHolderQuery("");
+                    }}
+                  >
+                    Change staff
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={addableCount === 0}
+                    onClick={() =>
+                      queueAssets(assets.filter((asset) => !asset.blockedReason))
+                    }
+                  >
+                    Add all ({addableCount})
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label htmlFor="holder-search">Staff ({holders.length})</Label>
+                <div className="relative">
+                  <UserRound className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="holder-search"
+                    value={holderQuery}
+                    onChange={(event) => setHolderQuery(event.target.value)}
+                    placeholder="Filter by employee name"
+                    className="h-10 pl-9"
+                    autoComplete="off"
+                  />
+                </div>
+                {holders.length === 0 ? (
+                  <p className="rounded-xl border px-3 py-4 text-sm text-muted-foreground">
+                    No staff currently hold assets in this register.
+                  </p>
+                ) : visibleHolders.length === 0 ? (
+                  <p className="rounded-xl border px-3 py-4 text-sm text-muted-foreground">
+                    No employee matches “{holderQuery.trim()}”.
+                  </p>
+                ) : (
+                  <ScrollArea className="h-44 rounded-xl border p-1.5">
+                    <div className="space-y-1">
+                      {visibleHolders.map((holder) => (
+                        <HolderRow
+                          key={holder.key}
+                          holder={holder}
+                          selected={false}
+                          onSelect={() => {
+                            setHolderKey(holder.key);
+                            setHolderQuery("");
+                            setQuery("");
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </ScrollArea>
+                )}
+              </div>
+            )}
             <div className="flex flex-col gap-2 sm:flex-row">
               <div className="relative flex-1">
                 <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search name, serial, tag, or holder"
+                  placeholder={
+                    selectedHolder
+                      ? "Search this person’s assets"
+                      : "Search name, serial, or tag"
+                  }
                   className="h-10 pl-9"
                 />
               </div>
@@ -337,9 +514,13 @@ export function ReturnDesk({
               {assets.length === 0 ? (
                 <div className="flex min-h-48 flex-col items-center justify-center gap-2 p-8 text-center">
                   <Undo2 className="size-8 text-muted-foreground" />
-                  <p className="font-medium">No assets in this view</p>
+                  <p className="font-medium">
+                    {selectedHolder ? `Nothing listed for ${selectedHolder.name}` : "No assets in this view"}
+                  </p>
                   <p className="max-w-sm text-sm text-muted-foreground">
-                    Only Assigned and Loan stock can be returned. Scan a serial or switch to All.
+                    {selectedHolder
+                      ? "They may have nothing out, or those items are already in the return list."
+                      : "Only Assigned and Loan stock can be returned. Pick a staff member or scan a serial."}
                   </p>
                 </div>
               ) : (
@@ -399,7 +580,7 @@ export function ReturnDesk({
             <CardDescription>
               {basket.length
                 ? "Set reason and condition per asset, then confirm the batch."
-                : "Scan or tap assets on the left to add them."}
+                : "Pick a staff member, scan, or tap assets on the left."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 pt-4">

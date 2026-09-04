@@ -16,7 +16,7 @@ const TOOLS = [
   {
     href: "/return",
     title: "Asset Return",
-    description: "Take assigned or loaned assets back into stock. Scan several, confirm once.",
+    description: "Filter by staff, see what they hold, and take those assets back into stock.",
     icon: Undo2,
   },
   {
