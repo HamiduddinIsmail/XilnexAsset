@@ -90,8 +90,11 @@ export function HandoverSignForm({ token }: { token: string }) {
             Signature saved
           </p>
           <p className="text-sm text-muted-foreground">
-            {session.staffName} acknowledged {session.assetName}. You can close this page. The admin
-            can now review the handover.
+            {session.staffName} acknowledged{" "}
+            {session.assets.length === 1
+              ? session.assets[0].name
+              : `${session.assets.length} assets`}
+            . You can close this page. The admin can now review the handover.
           </p>
           {session.signatureDataUrl ? (
             <img
@@ -105,13 +108,17 @@ export function HandoverSignForm({ token }: { token: string }) {
         <div className="space-y-4">
           <div className="rounded-2xl border bg-card p-4 text-sm">
             <p className="font-medium">{session.staffName}</p>
-            <p className="mt-1 text-muted-foreground">
-              {[session.assetName, session.assetId, session.serialNumber || "No serial"]
-                .filter(Boolean)
-                .join(" · ")}
-            </p>
+            <ul className="mt-2 space-y-1 text-muted-foreground">
+              {session.assets.map((asset) => (
+                <li key={asset.recordId}>
+                  {[asset.assetId, asset.name, asset.serialNumber || "No serial"]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </li>
+              ))}
+            </ul>
             <p className="mt-3 text-muted-foreground">
-              Sign below to confirm you received this company asset and will use it under company
+              Sign below to confirm you received {session.assets.length === 1 ? "this company asset" : "these company assets"} and will use {session.assets.length === 1 ? "it" : "them"} under company
               policy.
             </p>
           </div>

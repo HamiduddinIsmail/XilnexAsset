@@ -10,7 +10,7 @@ const TOOLS = [
   {
     href: "/handover",
     title: "Asset Handover",
-    description: "Scan an asset and assign it to someone in the company directory.",
+    description: "Hand several assets to one person in a single confirm.",
     icon: Handshake,
   },
   {

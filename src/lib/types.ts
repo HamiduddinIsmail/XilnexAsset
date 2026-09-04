@@ -111,14 +111,18 @@ export type HandoverPayload = {
   warning?: string;
 };
 
-export type HandoverSubmitInput = {
+export type HandoverItemInput = {
   assetRecordId: string;
+  condition: string;
+};
+
+export type HandoverSubmitInput = {
+  items: HandoverItemInput[];
   staffId: string;
   requestedById?: string;
   location: string;
   assignmentType: string;
   reason: string;
-  condition: string;
   handoverDate: string;
   expectedReturnDate: string;
   remarks: string;
@@ -130,8 +134,8 @@ export type HandoverResult = {
   mode: ConnectionMode;
   summary: string;
   changes: string[];
-  transactionId: string;
-  asset: HandoverAsset;
+  transactionIds: string[];
+  assets: HandoverAsset[];
 };
 
 export type ReturnOptions = {

@@ -11,7 +11,9 @@ import {
   QrCode,
   ScanLine,
   Search,
+  Trash2,
   UserRound,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -41,6 +43,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { useHardwareScanner } from "@/hooks/use-hardware-scanner";
 import {
+  defaultHandoverCondition,
   describeHandoverChanges,
   handoverAssetLabel,
   needsReturnDate,
@@ -59,6 +62,11 @@ import type {
 import { cn } from "@/lib/utils";
 
 type StatusFilter = "ready" | "assigned" | "all";
+
+type BasketItem = {
+  asset: HandoverAsset;
+  condition: string;
+};
 
 type HandoverDeskProps = {
   initialPayload?: HandoverPayload | null;
@@ -168,13 +176,12 @@ export function HandoverDesk({
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<StatusFilter>("ready");
   const [scanOpen, setScanOpen] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [basket, setBasket] = useState<BasketItem[]>([]);
   const [staffQuery, setStaffQuery] = useState("");
   const [staffId, setStaffId] = useState("");
   const [location, setLocation] = useState("");
   const [assignmentType, setAssignmentType] = useState("Permanent");
   const [reason, setReason] = useState("New Joiner");
-  const [condition, setCondition] = useState("Good");
   const [handoverDate, setHandoverDate] = useState(todayISO);
   const [expectedReturnDate, setExpectedReturnDate] = useState("");
   const [remarks, setRemarks] = useState("");
@@ -193,8 +200,9 @@ export function HandoverDesk({
   const conditions = pickHandoverConditions(payload?.options.conditions ?? []);
   const assignmentTypes = pickHandoverAssignmentTypes(payload?.options.assignmentTypes ?? []);
 
-  const selected = payload?.assets.find((asset) => asset.recordId === selectedId) ?? null;
   const staff = payload?.people.find((person) => person.id === staffId) ?? null;
+
+  const basketKey = basket.map((item) => item.asset.recordId).join(",");
 
   useEffect(() => {
     setAcknowledged(false);
@@ -203,7 +211,7 @@ export function HandoverDesk({
     setQrDataUrl("");
     setSignaturePreview(null);
     setSignError(null);
-  }, [selectedId, staffId]);
+  }, [basketKey, staffId]);
 
   useEffect(() => {
     if (!signOpen || !signToken || acknowledged) return;
@@ -233,8 +241,8 @@ export function HandoverDesk({
   }, [acknowledged, signOpen, signToken, staff?.name]);
 
   async function startSignature() {
-    if (!selected || !staff) {
-      toast.error("Pick the asset and who receives it first.");
+    if (!basket.length || !staff) {
+      toast.error("Add assets and pick who receives them first.");
       return;
     }
     setSignBusy(true);
@@ -246,7 +254,10 @@ export function HandoverDesk({
       const response = await fetch("/api/handover/sign", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ assetRecordId: selected.recordId, staffId: staff.id }),
+        body: JSON.stringify({
+          assetRecordIds: basket.map((item) => item.asset.recordId),
+          staffId: staff.id,
+        }),
       });
       const body = (await response.json()) as { token?: string; signPath?: string; error?: string };
       if (!response.ok || !body.token || !body.signPath) {
@@ -278,22 +289,34 @@ export function HandoverDesk({
     }
   }
 
-  function selectAsset(asset: HandoverAsset) {
+  function addAsset(asset: HandoverAsset) {
     if (asset.blockedReason) {
       toast.error(asset.blockedReason);
       return;
     }
-    setSelectedId(asset.recordId);
-    setLocation(asset.location || payload?.options.locations[0] || "");
-    setCondition(asset.condition && conditions.includes(asset.condition) ? asset.condition : "Good");
-    setAcknowledged(false);
+    if (basket.some((item) => item.asset.recordId === asset.recordId)) {
+      toast.error(`${asset.name} is already in the handover list.`);
+      return;
+    }
+    if (staff && asset.assigneeId === staff.id) {
+      toast.error(`${asset.name} is already assigned to ${staff.name}.`);
+      return;
+    }
+    setBasket((items) => [
+      ...items,
+      { asset, condition: defaultHandoverCondition(asset, conditions) },
+    ]);
+    if (!location) setLocation(asset.location || payload?.options.locations[0] || "");
     setLastResult(null);
+    toast.success(`Added ${handoverAssetLabel(asset.assetId, asset.name)}`);
   }
 
   const assets = useMemo(() => {
     const list = payload?.assets ?? [];
     const q = query.trim().toLowerCase();
+    const inBasket = new Set(basket.map((item) => item.asset.recordId));
     return list.filter((asset) => {
+      if (inBasket.has(asset.recordId)) return false;
       if (filter === "ready" && (asset.blockedReason || ["Assigned", "Loan"].includes(asset.currentStatus))) {
         return false;
       }
@@ -304,7 +327,7 @@ export function HandoverDesk({
         .toLowerCase()
         .includes(q);
     });
-  }, [payload, filter, query]);
+  }, [payload, filter, query, basket]);
 
   const people = useMemo(() => {
     const list = payload?.people ?? [];
@@ -327,8 +350,7 @@ export function HandoverDesk({
       });
       const body = (await response.json()) as { asset?: HandoverAsset; error?: string };
       if (!response.ok || !body.asset) throw new Error(body.error || "No matching asset.");
-      selectAsset(body.asset);
-      toast.success(`Selected ${body.asset.name}`);
+      addAsset(body.asset);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not match that serial.");
     }
@@ -339,47 +361,54 @@ export function HandoverDesk({
     onScan: (value) => void lookupSerial(value),
   });
 
-  const preview = selected && staff
-    ? describeHandoverChanges({
-        assetName: selected.name,
-        assetId: selected.assetId,
-        staffName: staff.name,
-        previousAssignee: selected.assigneeName,
-        nextStatus: nextAssetStatus(assignmentType),
-        location,
-        condition,
-        transactionType: nextTransactionType(selected.assigneeId, assignmentType),
-        transactionId: "new",
-      })
+  const preview = staff
+    ? basket.flatMap((item) =>
+        describeHandoverChanges({
+          assetName: item.asset.name,
+          assetId: item.asset.assetId,
+          staffName: staff.name,
+          previousAssignee: item.asset.assigneeName,
+          nextStatus: nextAssetStatus(assignmentType),
+          location,
+          condition: item.condition,
+          transactionType: nextTransactionType(item.asset.assigneeId, assignmentType),
+          transactionId: "new",
+        })
+      )
+    : [];
+
+  const alreadyHeld = staff
+    ? basket.filter((item) => item.asset.assigneeId === staff.id)
     : [];
 
   const canConfirm =
-    Boolean(selected) &&
-    !selected?.blockedReason &&
+    basket.length > 0 &&
+    basket.every((item) => item.condition && !item.asset.blockedReason) &&
     Boolean(staff) &&
     Boolean(location) &&
     Boolean(assignmentType) &&
     Boolean(reason) &&
-    Boolean(condition) &&
     Boolean(handoverDate) &&
     (!needsReturnDate(assignmentType) || Boolean(expectedReturnDate)) &&
     acknowledged &&
-    staff?.id !== selected?.assigneeId;
+    alreadyHeld.length === 0;
 
   async function confirmSubmit() {
-    if (!selected) return;
+    if (!basket.length || !staff) return;
     setSubmitting(true);
     try {
       const response = await fetch("/api/handover", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          assetRecordId: selected.recordId,
+          items: basket.map((item) => ({
+            assetRecordId: item.asset.recordId,
+            condition: item.condition,
+          })),
           staffId,
           location,
           assignmentType,
           reason,
-          condition,
           handoverDate,
           expectedReturnDate,
           remarks,
@@ -391,7 +420,7 @@ export function HandoverDesk({
       if (!response.ok) throw new Error(body.error || "Could not complete handover.");
       setLastResult(body);
       setConfirmOpen(false);
-      setSelectedId(body.asset.recordId);
+      setBasket([]);
       setStaffId("");
       setAcknowledged(false);
       setSignToken("");
@@ -400,7 +429,7 @@ export function HandoverDesk({
       toast.success(body.summary, {
         description:
           body.mode === "lark"
-            ? `${body.transactionId} written to Transaction Log.`
+            ? `${body.transactionIds.join(", ")} written to Transaction Log.`
             : "Saved in demo mode. Connect Lark Base to write the live tables.",
       });
       await load();
@@ -415,7 +444,7 @@ export function HandoverDesk({
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
       <DeskHeader
         title="Asset handover"
-        description="Scan the asset, pick who receives it, and confirm. The register and Transaction Log update immediately — no Lark Approval form."
+        description="Pick who receives the kit, add laptop, mouse, bag, and the rest, then confirm once."
         mode={payload?.mode}
         loading={loading}
         onRefresh={() => {
@@ -457,8 +486,13 @@ export function HandoverDesk({
           <CheckCircle2 />
           <AlertTitle>{lastResult.summary}</AlertTitle>
           <AlertDescription>
-            {lastResult.transactionId} · {lastResult.asset.name} is {lastResult.asset.currentStatus}
-            {lastResult.asset.assigneeName ? ` to ${lastResult.asset.assigneeName}` : ""}.
+            {lastResult.transactionIds.join(" · ") || "Saved"}
+            {lastResult.assets[0]
+              ? ` · ${lastResult.assets.length === 1
+                  ? `${lastResult.assets[0].name} is ${lastResult.assets[0].currentStatus}`
+                  : `${lastResult.assets.length} assets handed over`}`
+              : ""}
+            {lastResult.assets[0]?.assigneeName ? ` to ${lastResult.assets[0].assigneeName}` : ""}.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -468,10 +502,10 @@ export function HandoverDesk({
           <CardHeader className="border-b">
             <CardTitle className="flex items-center gap-2">
               <ScanLine className="size-4" />
-              Find the asset
+              Assets to hand over
             </CardTitle>
             <CardDescription>
-              Scan a serial, or search. Available stock is first; assigned assets are transfers.
+              Scan or tap several items for the same person. Assigned stock is a transfer.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 pt-4">
@@ -517,17 +551,14 @@ export function HandoverDesk({
                 </div>
               ) : (
                 <ul className="divide-y">
-                  {assets.map((asset) => {
-                    const active = asset.recordId === selectedId;
-                    return (
+                  {assets.map((asset) => (
                       <li key={asset.recordId}>
                         <button
                           type="button"
                           disabled={Boolean(asset.blockedReason)}
-                          onClick={() => selectAsset(asset)}
+                          onClick={() => addAsset(asset)}
                           className={cn(
                             "flex w-full flex-col gap-1 px-3 py-3 text-left sm:px-4",
-                            active && "bg-[var(--brand)]/20",
                             asset.blockedReason && "opacity-60"
                           )}
                         >
@@ -551,8 +582,7 @@ export function HandoverDesk({
                           </p>
                         </button>
                       </li>
-                    );
-                  })}
+                  ))}
                 </ul>
               )}
             </ScrollArea>
@@ -561,178 +591,217 @@ export function HandoverDesk({
 
         <Card>
           <CardHeader className="border-b">
-            <CardTitle className="flex items-center gap-2">
-              <ArrowRightLeft className="size-4" />
-              Who receives it
+            <CardTitle className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2">
+                <ArrowRightLeft className="size-4" />
+                Handover list ({basket.length})
+              </span>
+              {basket.length ? (
+                <Button type="button" size="sm" variant="ghost" onClick={() => setBasket([])}>
+                  <Trash2 className="size-3.5" />
+                  Clear
+                </Button>
+              ) : null}
             </CardTitle>
             <CardDescription>
-              {selected
-                ? `${selected.name}${selected.assigneeName ? ` · currently ${selected.assigneeName}` : " · unassigned"}`
-                : "Select an asset first."}
+              {staff
+                ? `To ${staff.name}. Add laptop, mouse, bag, then collect one signature.`
+                : "Pick who receives the assets, then add items from the left."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 pt-4">
-            {!selected ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="staff-search">Handover To ({payload?.people.length ?? 0})</Label>
+              <div className="relative">
+                <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="staff-search"
+                  value={staffQuery}
+                  onChange={(event) => setStaffQuery(event.target.value)}
+                  placeholder="Search name or email"
+                  className="h-10 pl-9"
+                />
+              </div>
+              <ScrollArea className="h-44 rounded-xl border p-1.5">
+                {people.length === 0 ? (
+                  <p className="p-3 text-sm text-muted-foreground">No matching people.</p>
+                ) : (
+                  <div className="space-y-1">
+                    {people.map((person) => (
+                      <PersonChip
+                        key={person.id}
+                        person={person}
+                        selected={person.id === staffId}
+                        onSelect={() => setStaffId(person.id)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </ScrollArea>
+            </div>
+
+            {basket.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Scan or tap an asset on the left. Details stay empty until then.
+                Nothing queued. Scan or tap assets on the left to add them for this person.
               </p>
             ) : (
-              <>
-                <div className="rounded-xl bg-muted/60 p-3 text-sm">
-                  <p className="font-medium">{selected.name}</p>
-                  <p className="text-muted-foreground">
-                    {[selected.assetId, selected.serialNumber || "No serial", selected.currentStatus]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="staff-search">Handover To ({payload?.people.length ?? 0})</Label>
-                  <div className="relative">
-                    <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      id="staff-search"
-                      value={staffQuery}
-                      onChange={(event) => setStaffQuery(event.target.value)}
-                      placeholder="Search name or email"
-                      className="h-10 pl-9"
-                    />
-                  </div>
-                  <ScrollArea className="h-64 rounded-xl border p-1.5">
-                    {people.length === 0 ? (
-                      <p className="p-3 text-sm text-muted-foreground">No matching people.</p>
-                    ) : (
-                      <div className="space-y-1">
-                        {people.map((person) => (
-                          <PersonChip
-                            key={person.id}
-                            person={person}
-                            selected={person.id === staffId}
-                            onSelect={() => setStaffId(person.id)}
-                          />
-                        ))}
+              <ul className="space-y-3">
+                {basket.map((item) => (
+                  <li key={item.asset.recordId} className="rounded-xl border p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-medium">
+                          {handoverAssetLabel(item.asset.assetId, item.asset.name)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {[item.asset.serialNumber || "No serial", item.asset.currentStatus]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
                       </div>
-                    )}
-                  </ScrollArea>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="handover-date">Handover date</Label>
-                  <Input
-                    id="handover-date"
-                    type="date"
-                    className="h-10"
-                    value={handoverDate}
-                    onChange={(event) => setHandoverDate(event.target.value)}
-                  />
-                </div>
-
-                <ChoiceRow
-                  label="Location"
-                  options={payload?.options.locations ?? []}
-                  value={location}
-                  onChange={setLocation}
-                />
-                <ChoiceRow
-                  label="Assignment type"
-                  options={assignmentTypes}
-                  value={assignmentType}
-                  onChange={setAssignmentType}
-                />
-                <ChoiceRow
-                  label="Reason"
-                  options={reasons}
-                  value={reason}
-                  onChange={setReason}
-                />
-                <ChoiceRow
-                  label="Condition on handover"
-                  options={conditions}
-                  value={condition}
-                  onChange={setCondition}
-                />
-
-                {needsReturnDate(assignmentType) ? (
-                  <div className="space-y-1.5">
-                    <Label htmlFor="return-date">Expected return date</Label>
-                    <Input
-                      id="return-date"
-                      type="date"
-                      className="h-10"
-                      value={expectedReturnDate}
-                      onChange={(event) => setExpectedReturnDate(event.target.value)}
-                    />
-                  </div>
-                ) : null}
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="remarks">Remarks (optional)</Label>
-                  <Textarea
-                    id="remarks"
-                    value={remarks}
-                    onChange={(event) => setRemarks(event.target.value)}
-                    placeholder="Anything the next person should know"
-                  />
-                </div>
-
-                {acknowledged && signaturePreview ? (
-                  <div className="space-y-3 rounded-xl border bg-[var(--brand)]/15 p-3">
-                    <p className="flex items-center gap-2 text-sm font-medium">
-                      <CheckCircle2 className="size-4" />
-                      Signed by {staff?.name}
-                    </p>
-                    <img
-                      src={signaturePreview}
-                      alt={`${staff?.name || "Employee"} signature`}
-                      className="w-full rounded-lg bg-white"
-                    />
-                    <Button type="button" variant="outline" size="sm" onClick={() => void startSignature()}>
-                      <PenLine className="size-3.5" />
-                      Collect a new signature
-                    </Button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => void startSignature()}
-                    className="w-full rounded-xl border border-border bg-background/40 p-3 text-left text-sm transition-colors hover:bg-muted"
-                  >
-                    <span className="flex items-start gap-2">
-                      <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md border">
-                        <QrCode className="size-3.5" />
-                      </span>
-                      <span>
-                        <span className="block font-medium">Employee acknowledgement</span>
-                        <span className="mt-1 block text-muted-foreground">
-                          The employee scans a QR, signs on their phone, then you can review this
-                          handover.
-                        </span>
-                      </span>
-                    </span>
-                  </button>
-                )}
-
-                {staff && selected.assigneeId === staff.id ? (
-                  <p className="text-sm text-destructive">This asset is already assigned to {staff.name}.</p>
-                ) : null}
-
-                <Button
-                  type="button"
-                  size="lg"
-                  className="w-full"
-                  disabled={!canConfirm}
-                  onClick={() => setConfirmOpen(true)}
-                >
-                  Review handover
-                </Button>
-                {!acknowledged && selected && staff ? (
-                  <p className="text-center text-xs text-muted-foreground">
-                    Review stays locked until {staff.name} saves a signature.
-                  </p>
-                ) : null}
-              </>
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="ghost"
+                        onClick={() =>
+                          setBasket((items) =>
+                            items.filter((row) => row.asset.recordId !== item.asset.recordId)
+                          )
+                        }
+                      >
+                        <X className="size-4" />
+                      </Button>
+                    </div>
+                    <div className="mt-3">
+                      <ChoiceRow
+                        label="Condition on handover"
+                        options={conditions}
+                        value={item.condition}
+                        onChange={(condition) =>
+                          setBasket((items) =>
+                            items.map((row) =>
+                              row.asset.recordId === item.asset.recordId ? { ...row, condition } : row
+                            )
+                          )
+                        }
+                      />
+                    </div>
+                  </li>
+                ))}
+              </ul>
             )}
+
+            <div className="space-y-1.5">
+              <Label htmlFor="handover-date">Handover date</Label>
+              <Input
+                id="handover-date"
+                type="date"
+                className="h-10"
+                value={handoverDate}
+                onChange={(event) => setHandoverDate(event.target.value)}
+              />
+            </div>
+
+            <ChoiceRow
+              label="Location"
+              options={payload?.options.locations ?? []}
+              value={location}
+              onChange={setLocation}
+            />
+            <ChoiceRow
+              label="Assignment type"
+              options={assignmentTypes}
+              value={assignmentType}
+              onChange={setAssignmentType}
+            />
+            <ChoiceRow
+              label="Reason"
+              options={reasons}
+              value={reason}
+              onChange={setReason}
+            />
+
+            {needsReturnDate(assignmentType) ? (
+              <div className="space-y-1.5">
+                <Label htmlFor="return-date">Expected return date</Label>
+                <Input
+                  id="return-date"
+                  type="date"
+                  className="h-10"
+                  value={expectedReturnDate}
+                  onChange={(event) => setExpectedReturnDate(event.target.value)}
+                />
+              </div>
+            ) : null}
+
+            <div className="space-y-1.5">
+              <Label htmlFor="remarks">Remarks (optional)</Label>
+              <Textarea
+                id="remarks"
+                value={remarks}
+                onChange={(event) => setRemarks(event.target.value)}
+                placeholder="Anything the next person should know"
+              />
+            </div>
+
+            {acknowledged && signaturePreview ? (
+              <div className="space-y-3 rounded-xl border bg-[var(--brand)]/15 p-3">
+                <p className="flex items-center gap-2 text-sm font-medium">
+                  <CheckCircle2 className="size-4" />
+                  Signed by {staff?.name}
+                </p>
+                <img
+                  src={signaturePreview}
+                  alt={`${staff?.name || "Employee"} signature`}
+                  className="w-full rounded-lg bg-white"
+                />
+                <Button type="button" variant="outline" size="sm" onClick={() => void startSignature()}>
+                  <PenLine className="size-3.5" />
+                  Collect a new signature
+                </Button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void startSignature()}
+                className="w-full rounded-xl border border-border bg-background/40 p-3 text-left text-sm transition-colors hover:bg-muted"
+              >
+                <span className="flex items-start gap-2">
+                  <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md border">
+                    <QrCode className="size-3.5" />
+                  </span>
+                  <span>
+                    <span className="block font-medium">Employee acknowledgement</span>
+                    <span className="mt-1 block text-muted-foreground">
+                      One QR covers every asset in this list. The employee signs once on their phone.
+                    </span>
+                  </span>
+                </span>
+              </button>
+            )}
+
+            {alreadyHeld.length ? (
+              <p className="text-sm text-destructive">
+                {alreadyHeld.length === 1
+                  ? `${alreadyHeld[0].asset.name} is already assigned to ${staff?.name}.`
+                  : `${alreadyHeld.length} of these assets are already assigned to ${staff?.name}.`}
+              </p>
+            ) : null}
+
+            <Button
+              type="button"
+              size="lg"
+              className="w-full"
+              disabled={!canConfirm}
+              onClick={() => setConfirmOpen(true)}
+            >
+              Review handover
+            </Button>
+            {!acknowledged && basket.length > 0 && staff ? (
+              <p className="text-center text-xs text-muted-foreground">
+                Review stays locked until {staff.name} saves a signature.
+              </p>
+            ) : null}
           </CardContent>
         </Card>
       </div>
@@ -831,12 +900,14 @@ export function HandoverDesk({
           <DialogHeader>
             <DialogTitle>Confirm handover</DialogTitle>
             <DialogDescription>
-              {selected && staff
-                ? `${handoverAssetLabel(selected.assetId, selected.name)} → ${staff.name}`
+              {staff
+                ? basket.length === 1
+                  ? `${handoverAssetLabel(basket[0].asset.assetId, basket[0].asset.name)} → ${staff.name}`
+                  : `${basket.length} assets → ${staff.name}`
                 : "Review what will be written to Lark."}
             </DialogDescription>
           </DialogHeader>
-          <ul className="space-y-1.5 rounded-lg bg-muted/60 p-3 text-sm">
+          <ul className="max-h-64 space-y-1.5 overflow-auto rounded-lg bg-muted/60 p-3 text-sm">
             {preview.map((change) => (
               <li key={change} className="flex gap-2">
                 <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-400" />

@@ -4,6 +4,7 @@ import { fieldToString, linkRecordIds, normalizeKey, parseUsers } from "@/lib/fi
 import {
   dateToMillis,
   describeHandoverChanges,
+  handoverAssetLabel,
   linkField,
   millisToDate,
   nextAssetStatus,
@@ -413,73 +414,89 @@ export async function lookupHandoverAsset(rawSerial: string): Promise<HandoverAs
 async function submitLarkHandover(input: HandoverSubmitInput): Promise<HandoverResult> {
   validateHandoverInput(input);
   const ctx = await resolveHandoverContext();
-  const record = await getTableRecord(ctx.token, ctx.appToken, ctx.assetTableId, input.assetRecordId);
-  if (!record) throw new Error("That asset was not found in the Asset Register.");
-  const asset = assetFromFields(ctx, input.assetRecordId, record.fields ?? {});
-  if (asset.blockedReason) throw new Error(asset.blockedReason);
-  if (asset.assigneeId && asset.assigneeId === input.staffId) {
-    throw new Error(`${asset.name} is already assigned to ${asset.assigneeName}.`);
-  }
-
   const desk = await getHandoverDesk();
   const staff = desk.people.find((person) => person.id === input.staffId);
   if (!staff) throw new Error("That person is not in the directory. Refresh and try again.");
 
-  const nextStatus = nextAssetStatus(input.assignmentType);
-  const transactionType = nextTransactionType(asset.assigneeId, input.assignmentType);
   const when = dateToMillis(input.handoverDate);
   const returnAt = input.expectedReturnDate ? dateToMillis(input.expectedReturnDate) : null;
+  const nextStatus = nextAssetStatus(input.assignmentType);
+  const transactionIds: string[] = [];
+  const changes: string[] = [];
+  const updatedAssets: HandoverAsset[] = [];
+  const labels: string[] = [];
 
-  const txnFields: Record<string, unknown> = {
-    [ctx.txnFields.type]: transactionType,
-    [ctx.txnFields.asset]: linkField(asset.recordId),
-    [ctx.txnFields.staff]: userField(staff.id),
-    [ctx.txnFields.assignmentType]: input.assignmentType,
-    [ctx.txnFields.location]: input.location,
-  };
-  if (ctx.txnFields.reason) txnFields[ctx.txnFields.reason] = input.reason;
-  if (ctx.txnFields.requestDate) txnFields[ctx.txnFields.requestDate] = when;
-  if (ctx.txnFields.effectiveDate) txnFields[ctx.txnFields.effectiveDate] = when;
-  if (ctx.txnFields.expectedReturn && returnAt) txnFields[ctx.txnFields.expectedReturn] = returnAt;
-  if (ctx.txnFields.approvalStatus) txnFields[ctx.txnFields.approvalStatus] = "Approved";
-  if (ctx.txnFields.assignmentStatus) txnFields[ctx.txnFields.assignmentStatus] = "Active";
-  if (ctx.txnFields.approvalDate) txnFields[ctx.txnFields.approvalDate] = when;
-  if (ctx.txnFields.condition) txnFields[ctx.txnFields.condition] = input.condition;
-  if (ctx.txnFields.remarks && input.remarks.trim()) txnFields[ctx.txnFields.remarks] = input.remarks.trim();
+  for (const item of input.items) {
+    const record = await getTableRecord(ctx.token, ctx.appToken, ctx.assetTableId, item.assetRecordId);
+    if (!record) throw new Error("An asset in the list was not found in the Asset Register.");
+    const asset = assetFromFields(ctx, item.assetRecordId, record.fields ?? {});
+    if (asset.blockedReason) throw new Error(`${asset.name}: ${asset.blockedReason}`);
+    if (asset.assigneeId && asset.assigneeId === input.staffId) {
+      throw new Error(`${asset.name} is already assigned to ${asset.assigneeName}.`);
+    }
 
-  const created = await createTableRecord(ctx.token, ctx.appToken, ctx.txnTableId, txnFields);
+    const transactionType = nextTransactionType(asset.assigneeId, input.assignmentType);
+    const txnFields: Record<string, unknown> = {
+      [ctx.txnFields.type]: transactionType,
+      [ctx.txnFields.asset]: linkField(asset.recordId),
+      [ctx.txnFields.staff]: userField(staff.id),
+      [ctx.txnFields.assignmentType]: input.assignmentType,
+      [ctx.txnFields.location]: input.location,
+    };
+    if (ctx.txnFields.reason) txnFields[ctx.txnFields.reason] = input.reason;
+    if (ctx.txnFields.requestDate) txnFields[ctx.txnFields.requestDate] = when;
+    if (ctx.txnFields.effectiveDate) txnFields[ctx.txnFields.effectiveDate] = when;
+    if (ctx.txnFields.expectedReturn && returnAt) txnFields[ctx.txnFields.expectedReturn] = returnAt;
+    if (ctx.txnFields.approvalStatus) txnFields[ctx.txnFields.approvalStatus] = "Approved";
+    if (ctx.txnFields.assignmentStatus) txnFields[ctx.txnFields.assignmentStatus] = "Active";
+    if (ctx.txnFields.approvalDate) txnFields[ctx.txnFields.approvalDate] = when;
+    if (ctx.txnFields.condition) txnFields[ctx.txnFields.condition] = item.condition;
+    if (ctx.txnFields.remarks && input.remarks.trim()) txnFields[ctx.txnFields.remarks] = input.remarks.trim();
 
-  const assetUpdate: Record<string, unknown> = {};
-  if (ctx.assetFields.assignee) assetUpdate[ctx.assetFields.assignee] = userField(staff.id);
-  if (ctx.assetFields.status) assetUpdate[ctx.assetFields.status] = nextStatus;
-  if (ctx.assetFields.location) assetUpdate[ctx.assetFields.location] = input.location;
-  if (ctx.assetFields.condition) assetUpdate[ctx.assetFields.condition] = input.condition;
-  if (ctx.assetFields.email && staff.email) assetUpdate[ctx.assetFields.email] = staff.email;
-  await updateTableRecord(ctx.token, ctx.appToken, ctx.assetTableId, asset.recordId, assetUpdate);
+    const created = await createTableRecord(ctx.token, ctx.appToken, ctx.txnTableId, txnFields);
 
-  const refreshed = await getTableRecord(ctx.token, ctx.appToken, ctx.assetTableId, asset.recordId);
-  const updated = assetFromFields(ctx, asset.recordId, refreshed?.fields ?? { ...record.fields, ...assetUpdate });
-  const createdFields = created?.fields ?? {};
-  const transactionId = ctx.txnFields.id
-    ? fieldToString(createdFields[ctx.txnFields.id])
-    : created?.record_id || "saved";
+    const assetUpdate: Record<string, unknown> = {};
+    if (ctx.assetFields.assignee) assetUpdate[ctx.assetFields.assignee] = userField(staff.id);
+    if (ctx.assetFields.status) assetUpdate[ctx.assetFields.status] = nextStatus;
+    if (ctx.assetFields.location) assetUpdate[ctx.assetFields.location] = input.location;
+    if (ctx.assetFields.condition) assetUpdate[ctx.assetFields.condition] = item.condition;
+    if (ctx.assetFields.email && staff.email) assetUpdate[ctx.assetFields.email] = staff.email;
+    await updateTableRecord(ctx.token, ctx.appToken, ctx.assetTableId, asset.recordId, assetUpdate);
+
+    const refreshed = await getTableRecord(ctx.token, ctx.appToken, ctx.assetTableId, asset.recordId);
+    const updated = assetFromFields(ctx, asset.recordId, refreshed?.fields ?? { ...record.fields, ...assetUpdate });
+    const createdFields = created?.fields ?? {};
+    const transactionId = ctx.txnFields.id
+      ? fieldToString(createdFields[ctx.txnFields.id])
+      : created?.record_id || "saved";
+
+    transactionIds.push(transactionId);
+    labels.push(handoverAssetLabel(asset.assetId, asset.name));
+    updatedAssets.push(updated);
+    changes.push(
+      ...describeHandoverChanges({
+        assetName: asset.name,
+        assetId: asset.assetId,
+        staffName: staff.name,
+        previousAssignee: asset.assigneeName,
+        nextStatus,
+        location: input.location,
+        condition: item.condition,
+        transactionType,
+        transactionId,
+      })
+    );
+  }
 
   return {
     mode: "lark",
-    summary: `Handed ${asset.name} to ${staff.name}.`,
-    changes: describeHandoverChanges({
-      assetName: asset.name,
-      assetId: asset.assetId,
-      staffName: staff.name,
-      previousAssignee: asset.assigneeName,
-      nextStatus,
-      location: input.location,
-      condition: input.condition,
-      transactionType,
-      transactionId,
-    }),
-    transactionId,
-    asset: updated,
+    summary:
+      labels.length === 1
+        ? `Handed ${labels[0]} to ${staff.name}.`
+        : `Handed ${labels.length} assets to ${staff.name}.`,
+    changes,
+    transactionIds,
+    assets: updatedAssets,
   };
 }
 

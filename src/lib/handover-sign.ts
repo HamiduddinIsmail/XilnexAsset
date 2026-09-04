@@ -6,14 +6,18 @@ const STORE_KEY = "handover-signs";
 const SESSION_MS = 30 * 60 * 1000;
 const MAX_SIGNATURE_CHARS = 500_000;
 
+export type HandoverSignAsset = {
+  recordId: string;
+  name: string;
+  assetId: string;
+  serialNumber: string;
+};
+
 export type HandoverSignSession = {
   token: string;
   createdAt: string;
   expiresAt: string;
-  assetRecordId: string;
-  assetName: string;
-  assetId: string;
-  serialNumber: string;
+  assets: HandoverSignAsset[];
   staffId: string;
   staffName: string;
   staffEmail: string;
@@ -24,9 +28,7 @@ export type HandoverSignSession = {
 export type HandoverSignPublic = {
   token: string;
   expiresAt: string;
-  assetName: string;
-  assetId: string;
-  serialNumber: string;
+  assets: HandoverSignAsset[];
   staffName: string;
   signed: boolean;
   signedAt?: string;
@@ -35,13 +37,30 @@ export type HandoverSignPublic = {
 
 type Store = Record<string, HandoverSignSession>;
 
+function sessionAssets(session: HandoverSignSession): HandoverSignAsset[] {
+  if (session.assets?.length) return session.assets;
+  const legacy = session as HandoverSignSession & {
+    assetRecordId?: string;
+    assetName?: string;
+    assetId?: string;
+    serialNumber?: string;
+  };
+  if (!legacy.assetRecordId) return [];
+  return [
+    {
+      recordId: legacy.assetRecordId,
+      name: legacy.assetName ?? "",
+      assetId: legacy.assetId ?? "",
+      serialNumber: legacy.serialNumber ?? "",
+    },
+  ];
+}
+
 function toPublic(session: HandoverSignSession, includeSignature = false): HandoverSignPublic {
   return {
     token: session.token,
     expiresAt: session.expiresAt,
-    assetName: session.assetName,
-    assetId: session.assetId,
-    serialNumber: session.serialNumber,
+    assets: sessionAssets(session),
     staffName: session.staffName,
     signed: Boolean(session.signedAt && session.signatureDataUrl),
     signedAt: session.signedAt,
@@ -71,14 +90,12 @@ async function writeStore(store: Store) {
 }
 
 export async function createHandoverSignSession(input: {
-  assetRecordId: string;
-  assetName: string;
-  assetId: string;
-  serialNumber: string;
+  assets: HandoverSignAsset[];
   staffId: string;
   staffName: string;
   staffEmail: string;
 }): Promise<HandoverSignPublic> {
+  if (!input.assets.length) throw new Error("Add at least one asset before collecting a signature.");
   const store = await readStore();
   const token = randomBytes(18).toString("base64url");
   const now = new Date();
@@ -86,10 +103,7 @@ export async function createHandoverSignSession(input: {
     token,
     createdAt: now.toISOString(),
     expiresAt: new Date(now.getTime() + SESSION_MS).toISOString(),
-    assetRecordId: input.assetRecordId,
-    assetName: input.assetName,
-    assetId: input.assetId,
-    serialNumber: input.serialNumber,
+    assets: input.assets,
     staffId: input.staffId,
     staffName: input.staffName,
     staffEmail: input.staffEmail,
@@ -136,8 +150,8 @@ export async function saveHandoverSignature(token: string, signatureDataUrl: str
 
 export async function assertHandoverSignature(input: {
   signatureToken?: string;
-  assetRecordId: string;
   staffId: string;
+  items: Array<{ assetRecordId: string }>;
 }) {
   if (!input.signatureToken) {
     throw new Error("The employee must sign before you can complete this handover.");
@@ -149,8 +163,15 @@ export async function assertHandoverSignature(input: {
   if (isExpired(session) && !session.signedAt) {
     throw new Error("That signature request expired. Ask the employee to sign again.");
   }
-  if (session.assetRecordId !== input.assetRecordId || session.staffId !== input.staffId) {
-    throw new Error("That signature is for a different asset or person. Collect a new one.");
+  if (session.staffId !== input.staffId) {
+    throw new Error("That signature is for a different person. Collect a new one.");
+  }
+  const signedIds = sessionAssets(session)
+    .map((asset) => asset.recordId)
+    .sort();
+  const basketIds = input.items.map((item) => item.assetRecordId).sort();
+  if (signedIds.join("|") !== basketIds.join("|")) {
+    throw new Error("That signature is for a different set of assets. Collect a new one.");
   }
   return session;
 }

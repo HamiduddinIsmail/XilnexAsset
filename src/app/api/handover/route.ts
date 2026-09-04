@@ -30,6 +30,7 @@ export async function POST(request: Request) {
     const status =
       message.includes("Pick") ||
       message.includes("blocked") ||
+      message.includes("Scan or add") ||
       message.includes("already assigned") ||
       message.includes("acknowledgement") ||
       message.includes("must sign") ||

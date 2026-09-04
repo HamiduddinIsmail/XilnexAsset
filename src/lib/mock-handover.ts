@@ -3,9 +3,11 @@ import { normalizeKey } from "@/lib/field-value";
 import {
   blockedHandoverReason,
   describeHandoverChanges,
+  handoverAssetLabel,
   nextAssetStatus,
   nextTransactionType,
   toHandoverAsset,
+  validateHandoverInput,
 } from "@/lib/handover-shared";
 import type {
   HandoverAsset,
@@ -114,60 +116,77 @@ export function listMockRecentHandovers(): HandoverTransaction[] {
 }
 
 export function submitMockHandover(input: HandoverSubmitInput): HandoverResult {
+  validateHandoverInput(input);
   const staff = personById(input.staffId);
-  if (!staff) throw new Error("Pick who to hand the asset over to.");
-
-  const raw = getMockAsset(input.assetRecordId);
-  const blocked = blockedHandoverReason(raw.extra["Current Status"] ?? "");
-  if (blocked) throw new Error(blocked);
-
-  const currentHolder = personByName(raw.extra["Current Assignee"] ?? "");
-  if (currentHolder?.id === staff.id) {
-    throw new Error(`${raw.name} is already assigned to ${staff.name}.`);
-  }
+  if (!staff) throw new Error("Pick who to hand the assets over to.");
 
   const nextStatus = nextAssetStatus(input.assignmentType);
-  const type = nextTransactionType(currentHolder?.id ?? "", input.assignmentType);
-  updateMockAssignment(input.assetRecordId, {
-    assigneeName: staff.name,
-    status: nextStatus,
-    location: input.location,
-    condition: input.condition,
-  });
+  const transactionIds: string[] = [];
+  const changes: string[] = [];
+  const labels: string[] = [];
 
-  const txn = store();
-  const transactionId = `TXN-${String(txn.nextId).padStart(5, "0")}`;
-  txn.nextId += 1;
-  txn.transactions.unshift({
-    recordId: `txn-demo-${transactionId}`,
-    transactionId,
-    type,
-    assetName: raw.name,
-    staffName: staff.name,
-    location: input.location,
-    assignmentType: input.assignmentType,
-    status: "Active",
-    effectiveDate: input.handoverDate,
-  });
+  for (const item of input.items) {
+    const raw = getMockAsset(item.assetRecordId);
+    const blocked = blockedHandoverReason(raw.extra["Current Status"] ?? "");
+    if (blocked) throw new Error(`${raw.name}: ${blocked}`);
 
-  const asset = listMockHandoverAssets().find((item) => item.recordId === input.assetRecordId);
-  if (!asset) throw new Error("Asset not found after handover.");
+    const currentHolder = personByName(raw.extra["Current Assignee"] ?? "");
+    if (currentHolder?.id === staff.id) {
+      throw new Error(`${raw.name} is already assigned to ${staff.name}.`);
+    }
+
+    const type = nextTransactionType(currentHolder?.id ?? "", input.assignmentType);
+    updateMockAssignment(item.assetRecordId, {
+      assigneeName: staff.name,
+      status: nextStatus,
+      location: input.location,
+      condition: item.condition,
+    });
+
+    const txn = store();
+    const transactionId = `TXN-${String(txn.nextId).padStart(5, "0")}`;
+    txn.nextId += 1;
+    txn.transactions.unshift({
+      recordId: `txn-demo-${transactionId}`,
+      transactionId,
+      type,
+      assetName: raw.name,
+      staffName: staff.name,
+      location: input.location,
+      assignmentType: input.assignmentType,
+      status: "Active",
+      effectiveDate: input.handoverDate,
+    });
+
+    transactionIds.push(transactionId);
+    labels.push(handoverAssetLabel(raw.extra["Asset Tag"] ?? "", raw.name));
+    changes.push(
+      ...describeHandoverChanges({
+        assetName: raw.name,
+        assetId: raw.extra["Asset Tag"] ?? "",
+        staffName: staff.name,
+        previousAssignee: currentHolder?.name ?? "",
+        nextStatus,
+        location: input.location,
+        condition: item.condition,
+        transactionType: type,
+        transactionId,
+      })
+    );
+  }
+
+  const assets = listMockHandoverAssets().filter((asset) =>
+    input.items.some((item) => item.assetRecordId === asset.recordId)
+  );
 
   return {
     mode: "demo",
-    summary: `Handed ${raw.name} to ${staff.name}.`,
-    changes: describeHandoverChanges({
-      assetName: raw.name,
-      assetId: raw.extra["Asset Tag"] ?? "",
-      staffName: staff.name,
-      previousAssignee: currentHolder?.name ?? "",
-      nextStatus,
-      location: input.location,
-      condition: input.condition,
-      transactionType: type,
-      transactionId,
-    }),
-    transactionId,
-    asset,
+    summary:
+      labels.length === 1
+        ? `Handed ${labels[0]} to ${staff.name}.`
+        : `Handed ${labels.length} assets to ${staff.name}.`,
+    changes,
+    transactionIds,
+    assets,
   };
 }

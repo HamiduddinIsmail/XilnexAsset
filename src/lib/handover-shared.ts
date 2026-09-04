@@ -52,18 +52,30 @@ export function nextTransactionType(currentAssigneeId: string, assignmentType: s
   return "Handover";
 }
 
+export function defaultHandoverCondition(asset: HandoverAsset, options: string[]) {
+  if (asset.condition && options.includes(asset.condition)) return asset.condition;
+  if (options.includes("Good")) return "Good";
+  return options[0] ?? "Good";
+}
+
 export function validateHandoverInput(input: HandoverSubmitInput) {
-  if (!input.assetRecordId) throw new Error("Scan or select the asset first.");
-  if (!input.staffId) throw new Error("Pick who to hand the asset over to.");
+  if (!input.items.length) throw new Error("Scan or add at least one asset to hand over.");
+  const seen = new Set<string>();
+  for (const item of input.items) {
+    if (!item.assetRecordId) throw new Error("A handover line is missing its asset.");
+    if (seen.has(item.assetRecordId)) throw new Error("The same asset was added twice.");
+    seen.add(item.assetRecordId);
+    if (!item.condition) throw new Error("Pick the condition on handover for each asset.");
+  }
+  if (!input.staffId) throw new Error("Pick who to hand the assets over to.");
   if (!input.location) throw new Error("Pick a location.");
   if (!input.assignmentType) throw new Error("Pick an assignment type.");
   if (!input.reason) throw new Error("Pick a reason.");
-  if (!input.condition) throw new Error("Pick the condition on handover.");
   if (!input.handoverDate) throw new Error("Pick the handover date.");
   dateToMillis(input.handoverDate);
   if (needsReturnDate(input.assignmentType)) {
     if (!input.expectedReturnDate) {
-      throw new Error("Temporary and project assignments need an expected return date.");
+      throw new Error("Temporary assignments need an expected return date.");
     }
     dateToMillis(input.expectedReturnDate);
   }
