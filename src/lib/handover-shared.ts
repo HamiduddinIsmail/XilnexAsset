@@ -82,6 +82,7 @@ export function linkField(recordId: string) {
 
 export const HANDOVER_REASON_CHOICES = ["New Joiner", "Replacement", "Project Requirement"];
 export const HANDOVER_CONDITION_CHOICES = ["New", "Good", "Fair"];
+export const HANDOVER_ASSIGNMENT_TYPE_CHOICES = ["Permanent", "Temporary"];
 
 function pickListed(all: string[], wanted: string[]) {
   const byKey = new Map(all.map((item) => [normalizeKey(item), item]));
@@ -97,6 +98,10 @@ export function pickHandoverReasons(all: string[]) {
 
 export function pickHandoverConditions(all: string[]) {
   return pickListed(all, HANDOVER_CONDITION_CHOICES);
+}
+
+export function pickHandoverAssignmentTypes(all: string[]) {
+  return pickListed(all, HANDOVER_ASSIGNMENT_TYPE_CHOICES);
 }
 
 export function describeHandoverChanges(input: {

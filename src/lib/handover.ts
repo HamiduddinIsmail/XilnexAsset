@@ -7,6 +7,7 @@ import {
   millisToDate,
   nextAssetStatus,
   nextTransactionType,
+  pickHandoverAssignmentTypes,
   pickHandoverConditions,
   pickHandoverReasons,
   toHandoverAsset,
@@ -181,10 +182,8 @@ async function resolveHandoverContext(): Promise<HandoverContext> {
     txnFields,
     options: {
       locations: optionsFor(txnMeta, txnFields.location, DEMO_HANDOVER_OPTIONS.locations),
-      assignmentTypes: optionsFor(
-        txnMeta,
-        txnFields.assignmentType,
-        DEMO_HANDOVER_OPTIONS.assignmentTypes
+      assignmentTypes: pickHandoverAssignmentTypes(
+        optionsFor(txnMeta, txnFields.assignmentType, DEMO_HANDOVER_OPTIONS.assignmentTypes)
       ),
       reasons: pickHandoverReasons(optionsFor(txnMeta, txnFields.reason, DEMO_HANDOVER_OPTIONS.reasons)),
       conditions: pickHandoverConditions(

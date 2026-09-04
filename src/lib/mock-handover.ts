@@ -45,7 +45,7 @@ const PEOPLE: HandoverPerson[] = [
 
 export const DEMO_HANDOVER_OPTIONS: HandoverOptions = {
   locations: ["Penang HQ", "KL Office", "Vietnam", "Philippines", "Cambodia"],
-  assignmentTypes: ["Permanent", "Temporary", "Project", "Replacement"],
+  assignmentTypes: ["Permanent", "Temporary"],
   reasons: ["New Joiner", "Replacement", "Project Requirement"],
   conditions: ["New", "Good", "Fair"],
 };

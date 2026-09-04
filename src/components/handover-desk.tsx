@@ -43,6 +43,7 @@ import {
   needsReturnDate,
   nextAssetStatus,
   nextTransactionType,
+  pickHandoverAssignmentTypes,
   pickHandoverConditions,
   pickHandoverReasons,
 } from "@/lib/handover-shared";
@@ -180,6 +181,7 @@ export function HandoverDesk({
   const [lastResult, setLastResult] = useState<HandoverResult | null>(null);
   const reasons = pickHandoverReasons(payload?.options.reasons ?? []);
   const conditions = pickHandoverConditions(payload?.options.conditions ?? []);
+  const assignmentTypes = pickHandoverAssignmentTypes(payload?.options.assignmentTypes ?? []);
 
   const selected = payload?.assets.find((asset) => asset.recordId === selectedId) ?? null;
   const staff = payload?.people.find((person) => person.id === staffId) ?? null;
@@ -552,7 +554,7 @@ export function HandoverDesk({
                 />
                 <ChoiceRow
                   label="Assignment type"
-                  options={payload?.options.assignmentTypes ?? []}
+                  options={assignmentTypes}
                   value={assignmentType}
                   onChange={setAssignmentType}
                 />
