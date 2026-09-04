@@ -1,12 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowRightLeft,
   CheckCircle2,
   Handshake,
   Loader2,
+  PenLine,
+  QrCode,
   ScanLine,
   Search,
   UserRound,
@@ -176,6 +178,13 @@ export function HandoverDesk({
   const [expectedReturnDate, setExpectedReturnDate] = useState("");
   const [remarks, setRemarks] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
+  const [signOpen, setSignOpen] = useState(false);
+  const [signBusy, setSignBusy] = useState(false);
+  const [signToken, setSignToken] = useState("");
+  const [signUrl, setSignUrl] = useState("");
+  const [qrDataUrl, setQrDataUrl] = useState("");
+  const [signaturePreview, setSignaturePreview] = useState<string | null>(null);
+  const [signError, setSignError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [lastResult, setLastResult] = useState<HandoverResult | null>(null);
@@ -185,6 +194,74 @@ export function HandoverDesk({
 
   const selected = payload?.assets.find((asset) => asset.recordId === selectedId) ?? null;
   const staff = payload?.people.find((person) => person.id === staffId) ?? null;
+
+  useEffect(() => {
+    setAcknowledged(false);
+    setSignToken("");
+    setSignUrl("");
+    setQrDataUrl("");
+    setSignaturePreview(null);
+    setSignError(null);
+  }, [selectedId, staffId]);
+
+  useEffect(() => {
+    if (!signOpen || !signToken || acknowledged) return;
+    let cancelled = false;
+    async function tick() {
+      try {
+        const response = await fetch(`/api/handover/sign/${signToken}`, { cache: "no-store" });
+        const body = (await response.json()) as {
+          signed?: boolean;
+          signatureDataUrl?: string;
+        };
+        if (cancelled || !response.ok || !body.signed) return;
+        setAcknowledged(true);
+        setSignaturePreview(body.signatureDataUrl ?? null);
+        setSignOpen(false);
+        toast.success(`${staff?.name || "Employee"} signed. You can review the handover.`);
+      } catch {
+        /* keep waiting */
+      }
+    }
+    void tick();
+    const timer = window.setInterval(() => void tick(), 1500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [acknowledged, signOpen, signToken, staff?.name]);
+
+  async function startSignature() {
+    if (!selected || !staff) {
+      toast.error("Pick the asset and who receives it first.");
+      return;
+    }
+    setSignBusy(true);
+    setSignError(null);
+    setAcknowledged(false);
+    setSignaturePreview(null);
+    setSignOpen(true);
+    try {
+      const response = await fetch("/api/handover/sign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assetRecordId: selected.recordId, staffId: staff.id }),
+      });
+      const body = (await response.json()) as { token?: string; signPath?: string; error?: string };
+      if (!response.ok || !body.token || !body.signPath) {
+        throw new Error(body.error || "Could not create a signing QR.");
+      }
+      const url = `${window.location.origin}${body.signPath}`;
+      setSignToken(body.token);
+      setSignUrl(url);
+      const QRCode = (await import("qrcode")).default;
+      setQrDataUrl(await QRCode.toDataURL(url, { width: 280, margin: 1, errorCorrectionLevel: "M" }));
+    } catch (error) {
+      setSignError(error instanceof Error ? error.message : "Could not create a signing QR.");
+    } finally {
+      setSignBusy(false);
+    }
+  }
 
   async function load() {
     setLoadError(null);
@@ -305,6 +382,7 @@ export function HandoverDesk({
           expectedReturnDate,
           remarks,
           acknowledged,
+          signatureToken: signToken,
         }),
       });
       const body = (await response.json()) as HandoverResult & { error?: string };
@@ -314,6 +392,8 @@ export function HandoverDesk({
       setSelectedId(body.asset.recordId);
       setStaffId("");
       setAcknowledged(false);
+      setSignToken("");
+      setSignaturePreview(null);
       setRemarks("");
       toast.success(body.summary, {
         description:
@@ -594,34 +674,42 @@ export function HandoverDesk({
                   />
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setAcknowledged((value) => !value)}
-                  className={cn(
-                    "w-full rounded-xl border p-3 text-left text-sm transition-colors",
-                    acknowledged
-                      ? "border-transparent bg-[var(--brand)]/25"
-                      : "border-border bg-background/40"
-                  )}
-                >
-                  <span className="flex items-start gap-2">
-                    <span
-                      className={cn(
-                        "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md border",
-                        acknowledged && "border-transparent bg-[var(--brand)] text-white"
-                      )}
-                    >
-                      {acknowledged ? <CheckCircle2 className="size-4" /> : null}
-                    </span>
-                    <span>
-                      <span className="block font-medium">Employee acknowledgement</span>
-                      <span className="mt-1 block text-muted-foreground">
-                        The employee received this asset, will use it under company policy, and
-                        will return it when required or when they leave.
+                {acknowledged && signaturePreview ? (
+                  <div className="space-y-3 rounded-xl border bg-[var(--brand)]/15 p-3">
+                    <p className="flex items-center gap-2 text-sm font-medium">
+                      <CheckCircle2 className="size-4" />
+                      Signed by {staff?.name}
+                    </p>
+                    <img
+                      src={signaturePreview}
+                      alt={`${staff?.name || "Employee"} signature`}
+                      className="w-full rounded-lg bg-white"
+                    />
+                    <Button type="button" variant="outline" size="sm" onClick={() => void startSignature()}>
+                      <PenLine className="size-3.5" />
+                      Collect a new signature
+                    </Button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void startSignature()}
+                    className="w-full rounded-xl border border-border bg-background/40 p-3 text-left text-sm transition-colors hover:bg-muted"
+                  >
+                    <span className="flex items-start gap-2">
+                      <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md border">
+                        <QrCode className="size-3.5" />
+                      </span>
+                      <span>
+                        <span className="block font-medium">Employee acknowledgement</span>
+                        <span className="mt-1 block text-muted-foreground">
+                          The employee scans a QR, signs on their phone, then you can review this
+                          handover.
+                        </span>
                       </span>
                     </span>
-                  </span>
-                </button>
+                  </button>
+                )}
 
                 {staff && selected.assigneeId === staff.id ? (
                   <p className="text-sm text-destructive">This asset is already assigned to {staff.name}.</p>
@@ -636,6 +724,11 @@ export function HandoverDesk({
                 >
                   Review handover
                 </Button>
+                {!acknowledged && selected && staff ? (
+                  <p className="text-center text-xs text-muted-foreground">
+                    Review stays locked until {staff.name} saves a signature.
+                  </p>
+                ) : null}
               </>
             )}
           </CardContent>
@@ -680,6 +773,57 @@ export function HandoverDesk({
         }}
       />
 
+      <Dialog open={signOpen} onOpenChange={(open) => !signBusy && setSignOpen(open)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Employee signature</DialogTitle>
+            <DialogDescription>
+              {staff
+                ? `Ask ${staff.name} to scan this QR on their phone and sign.`
+                : "Ask the employee to scan this QR on their phone and sign."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-3">
+            {signBusy ? (
+              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" />
+                Preparing the signing page…
+              </p>
+            ) : qrDataUrl ? (
+              <img src={qrDataUrl} alt="Signing QR code" className="size-56 rounded-xl bg-white p-2" />
+            ) : null}
+            {signUrl ? (
+              <p className="w-full break-all rounded-lg bg-muted/60 px-3 py-2 text-center text-xs text-muted-foreground">
+                {signUrl}
+              </p>
+            ) : null}
+            {signUrl.includes("://127.0.0.1") || signUrl.includes("://localhost") ? (
+              <p className="text-center text-xs text-muted-foreground">
+                A phone cannot open 127.0.0.1. Use this on the live site, or open the signing page
+                on this screen.
+              </p>
+            ) : null}
+            {signError ? <p className="text-sm text-destructive">{signError}</p> : null}
+            {!acknowledged && !signBusy ? (
+              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="size-3.5 animate-spin" />
+                Waiting for the signature…
+              </p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            {signUrl ? (
+              <Button type="button" variant="outline" onClick={() => window.open(signUrl, "_blank")}>
+                Open on this screen
+              </Button>
+            ) : null}
+            <Button type="button" variant="outline" disabled={signBusy} onClick={() => setSignOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={confirmOpen} onOpenChange={(open) => !open && !submitting && setConfirmOpen(false)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -698,6 +842,16 @@ export function HandoverDesk({
               </li>
             ))}
           </ul>
+          {signaturePreview ? (
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium">Employee signature</p>
+              <img
+                src={signaturePreview}
+                alt="Employee signature"
+                className="w-full rounded-lg bg-white"
+              />
+            </div>
+          ) : null}
           <DialogFooter>
             <Button type="button" variant="outline" disabled={submitting} onClick={() => setConfirmOpen(false)}>
               Cancel

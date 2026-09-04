@@ -57,3 +57,117 @@ export type MaintenanceAdvanceResult = {
   summary: string;
   changes: string[];
 };
+
+export type HandoverPerson = {
+  id: string;
+  name: string;
+  email: string;
+  avatarUrl: string;
+};
+
+export type HandoverAsset = {
+  recordId: string;
+  assetId: string;
+  name: string;
+  serialNumber: string;
+  currentStatus: string;
+  location: string;
+  condition: string;
+  assigneeId: string;
+  assigneeName: string;
+  assigneeEmail: string;
+  blockedReason: string | null;
+};
+
+export type HandoverTransaction = {
+  recordId: string;
+  transactionId: string;
+  type: string;
+  assetName: string;
+  staffName: string;
+  location: string;
+  assignmentType: string;
+  status: string;
+  effectiveDate: string;
+};
+
+export type HandoverOptions = {
+  locations: string[];
+  assignmentTypes: string[];
+  reasons: string[];
+  conditions: string[];
+};
+
+export type HandoverPayload = {
+  mode: ConnectionMode;
+  tableName: string;
+  transactionTableName: string;
+  assets: HandoverAsset[];
+  people: HandoverPerson[];
+  recent: HandoverTransaction[];
+  options: HandoverOptions;
+  peopleLimited: boolean;
+  peopleHint?: string;
+  warning?: string;
+};
+
+export type HandoverSubmitInput = {
+  assetRecordId: string;
+  staffId: string;
+  requestedById?: string;
+  location: string;
+  assignmentType: string;
+  reason: string;
+  condition: string;
+  handoverDate: string;
+  expectedReturnDate: string;
+  remarks: string;
+  acknowledged: boolean;
+  signatureToken?: string;
+};
+
+export type HandoverResult = {
+  mode: ConnectionMode;
+  summary: string;
+  changes: string[];
+  transactionId: string;
+  asset: HandoverAsset;
+};
+
+export type ReturnOptions = {
+  locations: string[];
+  reasons: string[];
+  conditions: string[];
+};
+
+export type ReturnPayload = {
+  mode: ConnectionMode;
+  tableName: string;
+  transactionTableName: string;
+  assets: HandoverAsset[];
+  recent: HandoverTransaction[];
+  options: ReturnOptions;
+  warning?: string;
+};
+
+export type ReturnItemInput = {
+  assetRecordId: string;
+  reason: string;
+  condition: string;
+};
+
+export type ReturnSubmitInput = {
+  items: ReturnItemInput[];
+  location: string;
+  returnDate: string;
+  remarks: string;
+  acknowledged: boolean;
+};
+
+export type ReturnResult = {
+  mode: ConnectionMode;
+  summary: string;
+  changes: string[];
+  transactionIds: string[];
+  assets: HandoverAsset[];
+};

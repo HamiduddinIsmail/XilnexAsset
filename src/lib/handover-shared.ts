@@ -67,8 +67,8 @@ export function validateHandoverInput(input: HandoverSubmitInput) {
     }
     dateToMillis(input.expectedReturnDate);
   }
-  if (!input.acknowledged) {
-    throw new Error("Tick the acknowledgement before completing the handover.");
+  if (!input.signatureToken || !input.acknowledged) {
+    throw new Error("The employee must sign before you can complete this handover.");
   }
 }
 

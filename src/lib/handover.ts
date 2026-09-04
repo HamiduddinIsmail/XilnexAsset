@@ -1,4 +1,5 @@
 import { invalidateAssetsCache } from "@/lib/assets";
+import { assertHandoverSignature } from "@/lib/handover-sign";
 import { fieldToString, linkRecordIds, normalizeKey, parseUsers } from "@/lib/field-value";
 import {
   dateToMillis,
@@ -483,15 +484,21 @@ async function submitLarkHandover(input: HandoverSubmitInput): Promise<HandoverR
 
 export async function submitHandover(input: HandoverSubmitInput): Promise<HandoverResult> {
   validateHandoverInput(input);
+  const signed = await assertHandoverSignature(input);
+  const signedNote = `Employee signature captured ${signed.signedAt} (${signed.staffName}).`;
+  const nextInput: HandoverSubmitInput = {
+    ...input,
+    remarks: [input.remarks.trim(), signedNote].filter(Boolean).join("\n"),
+  };
 
   if (!(await isLarkConfigured())) {
-    const result = submitMockHandover(input);
+    const result = submitMockHandover(nextInput);
     invalidateHandoverCache();
     invalidateAssetsCache();
     return result;
   }
 
-  const result = await submitLarkHandover(input);
+  const result = await submitLarkHandover(nextInput);
   invalidateHandoverCache();
   invalidateAssetsCache();
   return result;
