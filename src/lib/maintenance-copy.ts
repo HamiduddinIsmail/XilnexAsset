@@ -9,6 +9,8 @@ export function isWorkshopJob(type: string) {
   return key === "repair" || key === "upgrade";
 }
 
+export const CONDITION_AFTER_CHOICES = ["Good", "Fair", "Damaged"];
+
 export function workshopNoun(type: string) {
   return typeKey(type) === "upgrade" ? "upgrade" : "repair";
 }
@@ -38,6 +40,7 @@ export function describeMaintenanceAdvance(
   const cost =
     typeof details?.cost === "number" && Number.isFinite(details.cost) ? details.cost : null;
   const result = details?.result?.trim() || "";
+  const conditionAfter = details?.conditionAfter?.trim() || "";
 
   if (action === "start") {
     const changes = [`${job.maintenanceId} status → In Progress`, "Start Date is set automatically"];
@@ -56,8 +59,14 @@ export function describeMaintenanceAdvance(
     changes.push(
       result ? `Repair Result / Action Taken → ${result}` : "Repair Result / Action Taken (required)"
     );
-    changes.push("Condition after maintenance → Good");
-    changes.push(`${job.assetId || job.assetName} condition → Good`);
+    changes.push(
+      conditionAfter
+        ? `Asset Condition After Maintenance → ${conditionAfter}`
+        : "Asset Condition After Maintenance (required)"
+    );
+    if (conditionAfter) {
+      changes.push(`${job.assetId || job.assetName} condition → ${conditionAfter}`);
+    }
     changes.push(
       job.assignee
         ? `Current status stays Assigned (${job.assignee})`
@@ -77,7 +86,11 @@ export function previewMaintenanceChanges(
   return describeMaintenanceAdvance(job, job.nextAction, details);
 }
 
-export function maintenanceSummary(job: MaintenanceJob, action: MaintenanceAction) {
+export function maintenanceSummary(
+  job: MaintenanceJob,
+  action: MaintenanceAction,
+  details?: MaintenanceAdvanceDetails
+) {
   const noun = workshopNoun(job.type);
   if (action === "start") {
     return job.type === "Disposal"
@@ -87,7 +100,9 @@ export function maintenanceSummary(job: MaintenanceJob, action: MaintenanceActio
   if (job.type === "Disposal") {
     return `Marked disposal complete for ${job.assetName}.`;
   }
+  const condition = details?.conditionAfter?.trim();
+  const conditionText = condition ? `Condition is ${condition}` : "Condition is updated";
   return job.assignee
-    ? `${noun[0].toUpperCase()}${noun.slice(1)} complete on ${job.assetName}. Condition is Good and it stays Assigned to ${job.assignee}.`
-    : `${noun[0].toUpperCase()}${noun.slice(1)} complete on ${job.assetName}. Condition is Good and it is Available.`;
+    ? `${noun[0].toUpperCase()}${noun.slice(1)} complete on ${job.assetName}. ${conditionText} and it stays Assigned to ${job.assignee}.`
+    : `${noun[0].toUpperCase()}${noun.slice(1)} complete on ${job.assetName}. ${conditionText} and it is Available.`;
 }

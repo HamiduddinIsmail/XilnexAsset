@@ -1,4 +1,4 @@
-import { isWorkshopJob } from "@/lib/maintenance-copy";
+import { CONDITION_AFTER_CHOICES, isWorkshopJob } from "@/lib/maintenance-copy";
 import type { MaintenanceAction, MaintenanceAdvanceDetails, MaintenanceJob } from "@/lib/types";
 
 type Store = { jobs: MaintenanceJob[] };
@@ -166,12 +166,19 @@ export function advanceMockMaintenance(recordId: string, details: MaintenanceAdv
     job.status = "In Progress";
   } else if (workshop) {
     const result = details.result?.trim() ?? "";
+    const conditionAfter = details.conditionAfter?.trim() ?? "";
     if (!result) {
       throw new Error("Enter the repair result / action taken before marking this complete.");
     }
+    if (!conditionAfter) {
+      throw new Error("Choose the asset condition after maintenance.");
+    }
+    if (!CONDITION_AFTER_CHOICES.some((item) => item.toLowerCase() === conditionAfter.toLowerCase())) {
+      throw new Error(`Asset Condition After Maintenance must be one of: ${CONDITION_AFTER_CHOICES.join(", ")}.`);
+    }
     job.result = result;
     job.status = "Completed";
-    job.assetCondition = "Good";
+    job.assetCondition = conditionAfter;
     job.currentStatus = job.assignee ? "Assigned" : "Available";
   } else {
     job.status = "Completed";

@@ -30,6 +30,7 @@ export type MaintenanceAdvanceDetails = {
   vendor?: string;
   cost?: number | string | null;
   result?: string;
+  conditionAfter?: string;
 };
 
 export type MaintenanceJob = {
@@ -56,6 +57,7 @@ export type MaintenancePayload = {
   mode: ConnectionMode;
   tableName: string;
   jobs: MaintenanceJob[];
+  conditionAfterOptions: string[];
   warning?: string;
 };
 

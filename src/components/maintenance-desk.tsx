@@ -57,6 +57,38 @@ type MaintenanceDeskProps = {
   initialError?: string | null;
 };
 
+function ChoiceRow({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: string[];
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((option) => (
+          <Button
+            key={option}
+            type="button"
+            size="sm"
+            variant={value === option ? "default" : "outline"}
+            className={cn(value === option && "bg-[var(--brand)] text-white")}
+            onClick={() => onChange(option)}
+          >
+            {option}
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function parsedCost(value: string): number | null {
   const text = value.trim();
   if (!text) return null;
@@ -68,22 +100,29 @@ function formDetails(
   job: MaintenanceJob | null,
   vendor: string,
   cost: string,
-  result: string
+  result: string,
+  conditionAfter: string
 ): MaintenanceAdvanceDetails {
   if (!job) return {};
   if (job.nextAction === "start") return { vendor, cost: parsedCost(cost) };
-  if (job.nextAction === "complete") return { result };
+  if (job.nextAction === "complete") return { result, conditionAfter };
   return {};
 }
 
-function canConfirm(job: MaintenanceJob, vendor: string, cost: string, result: string) {
+function canConfirm(
+  job: MaintenanceJob,
+  vendor: string,
+  cost: string,
+  result: string,
+  conditionAfter: string
+) {
   if (!job.nextAction) return false;
   if (!isWorkshopJob(job.type)) return true;
   if (job.nextAction === "start") {
     const costValue = parsedCost(cost);
     return Boolean(vendor.trim()) && costValue != null && costValue >= 0;
   }
-  return Boolean(result.trim());
+  return Boolean(result.trim()) && Boolean(conditionAfter.trim());
 }
 
 export function MaintenanceDesk({
@@ -100,11 +139,15 @@ export function MaintenanceDesk({
   const [vendor, setVendor] = useState("");
   const [cost, setCost] = useState("");
   const [result, setResult] = useState("");
+  const [conditionAfter, setConditionAfter] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [lastResult, setLastResult] = useState<MaintenanceAdvanceResult | null>(null);
 
-  const details = formDetails(pending, vendor, cost, result);
+  const details = formDetails(pending, vendor, cost, result, conditionAfter);
   const changes = pending ? previewMaintenanceChanges(pending, details) : [];
+  const conditionOptions = payload?.conditionAfterOptions?.length
+    ? payload.conditionAfterOptions
+    : ["Good", "Fair", "Damaged"];
 
   async function load() {
     setLoadError(null);
@@ -145,6 +188,7 @@ export function MaintenanceDesk({
     setVendor("");
     setCost("");
     setResult("");
+    setConditionAfter("");
     setPending(job);
   }
 
@@ -172,10 +216,10 @@ export function MaintenanceDesk({
 
   async function confirmAdvance() {
     if (!pending) return;
-    if (!canConfirm(pending, vendor, cost, result)) {
+    if (!canConfirm(pending, vendor, cost, result, conditionAfter)) {
       toast.error(
         pending.nextAction === "complete"
-          ? "Enter the repair result / action taken."
+          ? "Enter the repair result and choose the condition after maintenance."
           : "Enter the vendor and maintenance cost."
       );
       return;
@@ -206,7 +250,7 @@ export function MaintenanceDesk({
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
       <DeskHeader
         title="Maintenance desk"
-        description="Send Repair and Upgrade jobs out with vendor and cost, then record the result when they come back. Start and completion dates are filled automatically. Disposal is unchanged for now."
+        description="Send Repair and Upgrade jobs out with vendor and cost, then record the result and condition when they come back. Start and completion dates are filled automatically. Disposal is unchanged for now."
         mode={payload?.mode}
         loading={loading}
         onRefresh={() => {
@@ -411,14 +455,22 @@ export function MaintenanceDesk({
                 </div>
               ) : null}
               {workshopPending && pending.nextAction === "complete" ? (
-                <div className="grid gap-1.5">
-                  <Label htmlFor="maintenance-result">Repair Result / Action Taken</Label>
-                  <Textarea
-                    id="maintenance-result"
-                    value={result}
-                    onChange={(event) => setResult(event.target.value)}
-                    placeholder="What was repaired or upgraded?"
-                    rows={3}
+                <div className="grid gap-3">
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="maintenance-result">Repair Result / Action Taken</Label>
+                    <Textarea
+                      id="maintenance-result"
+                      value={result}
+                      onChange={(event) => setResult(event.target.value)}
+                      placeholder="What was repaired or upgraded?"
+                      rows={3}
+                    />
+                  </div>
+                  <ChoiceRow
+                    label="Asset Condition After Maintenance"
+                    options={conditionOptions}
+                    value={conditionAfter}
+                    onChange={setConditionAfter}
                   />
                   <p className="text-xs text-muted-foreground">
                     Completion Date is set automatically.
@@ -449,7 +501,7 @@ export function MaintenanceDesk({
             </Button>
             <Button
               type="button"
-              disabled={submitting || !pending || !canConfirm(pending, vendor, cost, result)}
+              disabled={submitting || !pending || !canConfirm(pending, vendor, cost, result, conditionAfter)}
               onClick={() => void confirmAdvance()}
             >
               {submitting ? <Loader2 className="size-4 animate-spin" /> : null}

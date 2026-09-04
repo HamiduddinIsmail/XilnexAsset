@@ -7,6 +7,7 @@ import {
   getTableRecord,
   getTableRecords,
   isLarkConfigured,
+  listTableFieldMeta,
   listTableFieldNames,
   pickField,
   searchTableRecords,
@@ -18,6 +19,7 @@ import {
   listMockMaintenanceJobs,
 } from "@/lib/mock-maintenance";
 import {
+  CONDITION_AFTER_CHOICES,
   describeMaintenanceAdvance,
   isWorkshopJob,
   maintenanceSummary,
@@ -53,6 +55,7 @@ type MaintenanceContext = {
     cost: string | null;
     result: string | null;
   };
+  conditionAfterOptions: string[];
   assetFields: {
     name: string;
     serial: string;
@@ -118,8 +121,14 @@ async function resolveMaintenanceContext(): Promise<MaintenanceContext> {
     throw new Error("Could not find the Asset Register table linked to Setup.");
   }
 
-  const fields = await listTableFieldNames(session.token, session.appToken, maintenanceTable.table_id);
+  const fieldMeta = await listTableFieldMeta(session.token, session.appToken, maintenanceTable.table_id);
+  const fields = fieldMeta.map((field) => field.name);
   const assetFields = await listTableFieldNames(session.token, session.appToken, assetTable.table_id);
+  const conditionAfterField = pickOptional(fields, [
+    "asset condition after maintenance",
+    "condition after maintenance",
+    "condition after",
+  ]);
 
   const value: MaintenanceContext = {
     token: session.token,
@@ -137,11 +146,7 @@ async function resolveMaintenanceContext(): Promise<MaintenanceContext> {
       reportedBy: pickOptional(fields, ["reported by"]),
       startDate: pickOptional(fields, ["start date"]),
       completionDate: pickOptional(fields, ["completion date", "completed date"]),
-      conditionAfter: pickOptional(fields, [
-        "asset condition after maintenance",
-        "condition after maintenance",
-        "condition after",
-      ]),
+      conditionAfter: conditionAfterField,
       vendor: pickOptional(fields, ["vendor technician", "vendor", "technician"]),
       cost: pickOptional(fields, ["maintenance cost", "cost"]),
       result: pickOptional(fields, [
@@ -167,6 +172,7 @@ async function resolveMaintenanceContext(): Promise<MaintenanceContext> {
       assignee: pickOptional(assetFields, ["current assignee", "assignee", "owner"]),
       lastMaintenance: pickOptional(assetFields, ["last maintenance date"]),
     },
+    conditionAfterOptions: optionsForField(fieldMeta, conditionAfterField, CONDITION_AFTER_CHOICES),
   };
 
   contextCache = { at: Date.now(), value };
@@ -185,6 +191,21 @@ async function loadLinkedAssets(ctx: MaintenanceContext, assetIds: string[]) {
   return map;
 }
 
+function optionsForField(
+  meta: Array<{ name: string; options: string[] }>,
+  fieldName: string | null,
+  fallback: string[]
+) {
+  if (!fieldName) return fallback;
+  const match = meta.find((field) => field.name === fieldName);
+  return match?.options.length ? match.options : fallback;
+}
+
+function pickListedOption(all: string[], wanted: string) {
+  const key = normalizeKey(wanted);
+  return all.find((item) => normalizeKey(item) === key) || wanted;
+}
+
 function parseCostValue(value: unknown): number | null {
   if (value == null || value === "") return null;
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -199,10 +220,12 @@ export function parseMaintenanceAdvanceDetails(body: unknown): MaintenanceAdvanc
   const record = body as Record<string, unknown>;
   const vendor = typeof record.vendor === "string" ? record.vendor : "";
   const result = typeof record.result === "string" ? record.result : "";
+  const conditionAfter = typeof record.conditionAfter === "string" ? record.conditionAfter : "";
   return {
     vendor,
     cost: parseCostValue(record.cost),
     result,
+    conditionAfter,
   };
 }
 
@@ -215,12 +238,20 @@ function requireWorkshopStart(details: MaintenanceAdvanceDetails) {
   return { vendor, cost };
 }
 
-function requireWorkshopComplete(details: MaintenanceAdvanceDetails) {
+function requireWorkshopComplete(details: MaintenanceAdvanceDetails, allowed: string[]) {
   const result = details.result?.trim() ?? "";
+  const conditionAfter = details.conditionAfter?.trim() ?? "";
   if (!result) {
     throw new Error("Enter the repair result / action taken before marking this complete.");
   }
-  return { result };
+  if (!conditionAfter) {
+    throw new Error("Choose the asset condition after maintenance.");
+  }
+  const matched = pickListedOption(allowed, conditionAfter);
+  if (allowed.length && !allowed.some((item) => normalizeKey(item) === normalizeKey(conditionAfter))) {
+    throw new Error(`Asset Condition After Maintenance must be one of: ${allowed.join(", ")}.`);
+  }
+  return { result, conditionAfter: matched };
 }
 
 function jobFromRecords(
@@ -291,7 +322,7 @@ async function listLarkMaintenanceJobs(): Promise<MaintenancePayload> {
       return a.maintenanceId.localeCompare(b.maintenanceId);
     });
 
-  return { mode: "lark", tableName: ctx.tableName, jobs };
+  return { mode: "lark", tableName: ctx.tableName, jobs, conditionAfterOptions: ctx.conditionAfterOptions };
 }
 
 export async function getMaintenanceJobs(): Promise<MaintenancePayload> {
@@ -302,6 +333,7 @@ export async function getMaintenanceJobs(): Promise<MaintenancePayload> {
       mode: "demo",
       tableName: "Maintenance Log",
       jobs: listMockMaintenanceJobs(),
+      conditionAfterOptions: CONDITION_AFTER_CHOICES,
       warning:
         "Demo mode is on because no Lark Base is connected yet. Open jobs stay on this server until you connect Setup.",
     };
@@ -345,8 +377,8 @@ function describeAdvance(
   return describeMaintenanceAdvance(job, action, details);
 }
 
-function summaryFor(job: MaintenanceJob, action: MaintenanceAction) {
-  return maintenanceSummary(job, action);
+function summaryFor(job: MaintenanceJob, action: MaintenanceAction, details?: MaintenanceAdvanceDetails) {
+  return maintenanceSummary(job, action, details);
 }
 
 async function advanceLarkJob(
@@ -368,7 +400,10 @@ async function advanceLarkJob(
 
   const workshop = isWorkshopJob(job.type);
   const startDetails = action === "start" && workshop ? requireWorkshopStart(details) : null;
-  const completeDetails = action === "complete" && workshop ? requireWorkshopComplete(details) : null;
+  const completeDetails =
+    action === "complete" && workshop
+      ? requireWorkshopComplete(details, ctx.conditionAfterOptions)
+      : null;
   if (startDetails) {
     if (!ctx.fields.vendor) {
       throw new Error("The Maintenance Log is missing a Vendor / Technician field.");
@@ -377,8 +412,13 @@ async function advanceLarkJob(
       throw new Error("The Maintenance Log is missing a Maintenance Cost field.");
     }
   }
-  if (completeDetails && !ctx.fields.result) {
-    throw new Error("The Maintenance Log is missing a Repair Result / Action Taken field.");
+  if (completeDetails) {
+    if (!ctx.fields.result) {
+      throw new Error("The Maintenance Log is missing a Repair Result / Action Taken field.");
+    }
+    if (!ctx.fields.conditionAfter) {
+      throw new Error("The Maintenance Log is missing an Asset Condition After Maintenance field.");
+    }
   }
 
   const now = Date.now();
@@ -401,9 +441,9 @@ async function advanceLarkJob(
     if (completeDetails && ctx.fields.result) {
       maintFields[ctx.fields.result] = completeDetails.result;
     }
-    if (workshop) {
-      if (ctx.fields.conditionAfter) maintFields[ctx.fields.conditionAfter] = "Good";
-      if (ctx.assetFields.condition) assetUpdate[ctx.assetFields.condition] = "Good";
+    if (workshop && completeDetails) {
+      if (ctx.fields.conditionAfter) maintFields[ctx.fields.conditionAfter] = completeDetails.conditionAfter;
+      if (ctx.assetFields.condition) assetUpdate[ctx.assetFields.condition] = completeDetails.conditionAfter;
       if (ctx.assetFields.currentStatus) {
         assetUpdate[ctx.assetFields.currentStatus] = job.assignee ? "Assigned" : "Available";
       }
@@ -430,7 +470,7 @@ async function advanceLarkJob(
     mode: "lark",
     action,
     job: updated,
-    summary: summaryFor(job, action),
+    summary: summaryFor(job, action, details),
     changes: describeAdvance(job, action, details),
   };
 }
@@ -447,7 +487,7 @@ export async function advanceMaintenance(
       mode: "demo",
       action,
       job,
-      summary: summaryFor(job, action),
+      summary: summaryFor(job, action, details),
       changes: describeAdvance(job, action, details),
     };
   }

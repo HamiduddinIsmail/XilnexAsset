@@ -148,7 +148,7 @@ Open **Maintenance** in the header. It lists **3. Maintenance Log** jobs that ar
 
 1. Review Open jobs.
 2. **Send to repair** or **Send to upgrade** — fill **Vendor / Technician** and **Maintenance Cost**. Status becomes **In Progress**, the asset is **In Repair**, and **Start Date** is set automatically.
-3. **Mark repair/upgrade complete** — fill **Repair Result / Action Taken**. Status becomes **Completed**, condition after maintenance is **Good**, the asset condition is **Good**, **Completion Date** is set automatically, and current status is **Available** if there is no Current Assignee (otherwise **Assigned**).
+3. **Mark repair/upgrade complete** — fill **Repair Result / Action Taken** and choose **Asset Condition After Maintenance**. Status becomes **Completed**, that condition is written on the Maintenance Log and the asset, **Completion Date** is set automatically, and current status is **Available** if there is no Current Assignee (otherwise **Assigned**).
 
 Disposal jobs can be started and completed the same way, without vendor, cost, or result. Completing disposal does not set the asset back to Available or Good.
 
