@@ -148,6 +148,21 @@ export async function saveHandoverSignature(token: string, signatureDataUrl: str
   return toPublic(session, true);
 }
 
+const PNG_PREFIX = "data:image/png;base64,";
+
+export function pngBytesFromDataUrl(dataUrl: string) {
+  if (!dataUrl.startsWith(PNG_PREFIX)) {
+    throw new Error("That signature image is not a PNG.");
+  }
+  return Buffer.from(dataUrl.slice(PNG_PREFIX.length), "base64");
+}
+
+export function signatureAttachmentName(staffName: string, signedAt: string) {
+  const who = staffName.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "employee";
+  const day = (signedAt.match(/^\d{4}-\d{2}-\d{2}/)?.[0] ?? "signed").replaceAll("-", "");
+  return `signature-${who}-${day}.png`;
+}
+
 export async function assertHandoverSignature(input: {
   signatureToken?: string;
   staffId: string;

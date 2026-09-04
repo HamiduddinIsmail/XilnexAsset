@@ -373,6 +373,7 @@ export function HandoverDesk({
           condition: item.condition,
           transactionType: nextTransactionType(item.asset.assigneeId, assignmentType),
           transactionId: "new",
+          signatureAttached: true,
         })
       )
     : [];
@@ -755,6 +756,9 @@ export function HandoverDesk({
                   alt={`${staff?.name || "Employee"} signature`}
                   className="w-full rounded-lg bg-white"
                 />
+                <p className="text-xs text-muted-foreground">
+                  Confirm writes this PNG onto the Transaction Log Signature attachment for every asset in the list.
+                </p>
                 <Button type="button" variant="outline" size="sm" onClick={() => void startSignature()}>
                   <PenLine className="size-3.5" />
                   Collect a new signature

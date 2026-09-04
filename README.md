@@ -61,7 +61,8 @@ Create a custom app in the [Lark Developer Console](https://open.larksuite.com/a
    - `base:record:retrieve` (search records)
    - `base:record:update` (update a record)
    - `base:record:create` (new Transaction Log rows on handover)
-   or the broader `bitable:app` scope.
+   - `base:field:create` (adds the Signature attachment column if it is missing)
+   or the broader `bitable:app` scope, which also covers uploading the signature PNG.
 3. Publish a version of the app so the scopes take effect.
 4. In **Contacts permission** (not only app availability), set the range to **All employees**. Handover reads the company directory from this setting. Then publish a version of the app.
 5. Open your Asset Register Base → **…** → **Add application** / collaborate, and grant the app **edit** access. The test fails if the app is not a collaborator.
@@ -110,6 +111,9 @@ The app then, for **each** asset in the list:
 
 - Sets **Current Assignee**, **Current Status** (`Assigned`, or `Loan` for temporary), **Location**, and **Asset Condition** on **1. Asset Register**
 - Adds a row to **2. Transaction Log** with type **Handover**, **Transfer** (if someone already held it), or **Loan**, **Approval Status = Approved**, and **Assignment Status = Active**
+- Uploads the signature PNG onto the **Signature** attachment field on that Transaction Log row (the same image is attached to every row in the batch). The desk creates this Attachment column if it is missing.
+
+The signing QR session is only kept locally (`data/handover-signs.json`, or the Netlify `handover-signs` blob) until confirm. After Write to Lark, the Transaction Log attachment is the copy to use for acknowledgement PDFs later.
 
 There is no Lark approval chain. The person at the desk is the handover.
 

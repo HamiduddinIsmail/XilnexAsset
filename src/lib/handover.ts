@@ -1,5 +1,9 @@
 import { invalidateAssetsCache } from "@/lib/assets";
-import { assertHandoverSignature } from "@/lib/handover-sign";
+import {
+  assertHandoverSignature,
+  pngBytesFromDataUrl,
+  signatureAttachmentName,
+} from "@/lib/handover-sign";
 import { fieldToString, linkRecordIds, normalizeKey, parseUsers } from "@/lib/field-value";
 import {
   dateToMillis,
@@ -17,7 +21,9 @@ import {
   validateHandoverInput,
 } from "@/lib/handover-shared";
 import {
+  attachmentFieldValue,
   createTableRecord,
+  ensureAttachmentField,
   getLarkSession,
   getTableRecord,
   isLarkConfigured,
@@ -26,6 +32,7 @@ import {
   pickField,
   searchTableRecords,
   updateTableRecord,
+  uploadBitableFile,
 } from "@/lib/lark";
 import {
   DEMO_HANDOVER_OPTIONS,
@@ -74,6 +81,7 @@ type TxnFields = {
   approvalDate: string | null;
   condition: string | null;
   remarks: string | null;
+  signature: string;
   createdTime: string | null;
 };
 
@@ -171,6 +179,12 @@ async function resolveHandoverContext(): Promise<HandoverContext> {
     approvalDate: pickOptional(txnNames, ["approval date"]),
     condition: pickOptional(txnNames, ["condition on handover", "condition"]),
     remarks: pickOptional(txnNames, ["remarks", "remark"]),
+    signature: (
+      await ensureAttachmentField(session.token, session.appToken, txnTable.table_id, {
+        name: "Signature",
+        aliases: ["employee signature", "acknowledgement signature"],
+      })
+    ).name,
     createdTime: pickOptional(txnNames, ["created time"]),
   };
 
@@ -411,12 +425,26 @@ export async function lookupHandoverAsset(rawSerial: string): Promise<HandoverAs
   return asset;
 }
 
-async function submitLarkHandover(input: HandoverSubmitInput): Promise<HandoverResult> {
+async function submitLarkHandover(
+  input: HandoverSubmitInput,
+  signatureDataUrl: string,
+  staffName: string,
+  signedAt: string
+): Promise<HandoverResult> {
   validateHandoverInput(input);
   const ctx = await resolveHandoverContext();
   const desk = await getHandoverDesk();
   const staff = desk.people.find((person) => person.id === input.staffId);
   if (!staff) throw new Error("That person is not in the directory. Refresh and try again.");
+
+  const png = pngBytesFromDataUrl(signatureDataUrl);
+  const fileToken = await uploadBitableFile({
+    token: ctx.token,
+    appToken: ctx.appToken,
+    fileName: signatureAttachmentName(staffName, signedAt),
+    bytes: png,
+  });
+  const signatureCell = attachmentFieldValue(fileToken);
 
   const when = dateToMillis(input.handoverDate);
   const returnAt = input.expectedReturnDate ? dateToMillis(input.expectedReturnDate) : null;
@@ -442,6 +470,7 @@ async function submitLarkHandover(input: HandoverSubmitInput): Promise<HandoverR
       [ctx.txnFields.staff]: userField(staff.id),
       [ctx.txnFields.assignmentType]: input.assignmentType,
       [ctx.txnFields.location]: input.location,
+      [ctx.txnFields.signature]: signatureCell,
     };
     if (ctx.txnFields.reason) txnFields[ctx.txnFields.reason] = input.reason;
     if (ctx.txnFields.requestDate) txnFields[ctx.txnFields.requestDate] = when;
@@ -484,6 +513,7 @@ async function submitLarkHandover(input: HandoverSubmitInput): Promise<HandoverR
         condition: item.condition,
         transactionType,
         transactionId,
+        signatureAttached: true,
       })
     );
   }
@@ -503,7 +533,10 @@ async function submitLarkHandover(input: HandoverSubmitInput): Promise<HandoverR
 export async function submitHandover(input: HandoverSubmitInput): Promise<HandoverResult> {
   validateHandoverInput(input);
   const signed = await assertHandoverSignature(input);
-  const signedNote = `Employee signature captured ${signed.signedAt} (${signed.staffName}).`;
+  if (!signed.signatureDataUrl) {
+    throw new Error("The employee must sign before you can complete this handover.");
+  }
+  const signedNote = `Employee signed ${signed.signedAt} (${signed.staffName}). PNG stored on Transaction Log Signature.`;
   const nextInput: HandoverSubmitInput = {
     ...input,
     remarks: [input.remarks.trim(), signedNote].filter(Boolean).join("\n"),
@@ -516,7 +549,12 @@ export async function submitHandover(input: HandoverSubmitInput): Promise<Handov
     return result;
   }
 
-  const result = await submitLarkHandover(nextInput);
+  const result = await submitLarkHandover(
+    nextInput,
+    signed.signatureDataUrl,
+    signed.staffName,
+    signed.signedAt ?? new Date().toISOString()
+  );
   invalidateHandoverCache();
   invalidateAssetsCache();
   return result;

@@ -131,6 +131,7 @@ export function describeHandoverChanges(input: {
   condition: string;
   transactionType: string;
   transactionId: string;
+  signatureAttached?: boolean;
 }) {
   const asset = handoverAssetLabel(input.assetId ?? "", input.assetName);
   const changes = [
@@ -141,7 +142,8 @@ export function describeHandoverChanges(input: {
     `Location → ${input.location}`,
     `Condition on handover → ${input.condition}`,
     `Transaction Log ${input.transactionId || "(new)"} · ${input.transactionType}, Approved`,
-    "Handed over by Admin team",
   ];
+  if (input.signatureAttached) changes.push("Signature PNG attached on Transaction Log");
+  changes.push("Handed over by Admin team");
   return changes;
 }

@@ -171,6 +171,7 @@ export function submitMockHandover(input: HandoverSubmitInput): HandoverResult {
         condition: item.condition,
         transactionType: type,
         transactionId,
+        signatureAttached: true,
       })
     );
   }
