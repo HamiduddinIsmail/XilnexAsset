@@ -26,6 +26,49 @@ export function normalizeKey(value: string): string {
   return value.trim().toLowerCase().replace(/[\s_\-/]+/g, " ");
 }
 
+export type PersonRef = {
+  id: string;
+  name: string;
+  email: string;
+  avatarUrl: string;
+};
+
+export function parseUsers(value: unknown): PersonRef[] {
+  if (value == null) return [];
+  const items = Array.isArray(value) ? value : [value];
+  const people: PersonRef[] = [];
+  for (const item of items) {
+    if (typeof item === "string") {
+      if (item.startsWith("ou_")) {
+        people.push({ id: item, name: item, email: "", avatarUrl: "" });
+      }
+      continue;
+    }
+    if (!item || typeof item !== "object") continue;
+    const record = item as Record<string, unknown>;
+    const id =
+      (typeof record.id === "string" && record.id) ||
+      (typeof record.open_id === "string" && record.open_id) ||
+      "";
+    if (!id) continue;
+    const avatar =
+      typeof record.avatar_url === "string"
+        ? record.avatar_url
+        : record.avatar && typeof record.avatar === "object"
+          ? String((record.avatar as { avatar_72?: string }).avatar_72 ?? "")
+          : "";
+    people.push({
+      id,
+      name:
+        String(record.name || record.en_name || record.email || "")
+          .trim() || id,
+      email: String(record.email || "").trim(),
+      avatarUrl: avatar.trim(),
+    });
+  }
+  return people;
+}
+
 export function linkRecordIds(value: unknown): string[] {
   if (value == null) return [];
   if (typeof value === "string") {

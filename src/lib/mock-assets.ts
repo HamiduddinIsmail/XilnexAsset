@@ -7,8 +7,11 @@ const SEED: AssetMeta[] = [
     serialNumber: "",
     extra: {
       Category: "Laptop",
-      Location: "HQ / Finance",
+      Location: "Penang HQ",
       "Asset Tag": "IT-1042",
+      "Current Status": "Available",
+      "Asset Condition": "Good",
+      "Current Assignee": "",
     },
   },
   {
@@ -17,8 +20,11 @@ const SEED: AssetMeta[] = [
     serialNumber: "PF3K7L2",
     extra: {
       Category: "Laptop",
-      Location: "HQ / Sales",
+      Location: "Penang HQ",
       "Asset Tag": "IT-0881",
+      "Current Status": "Assigned",
+      "Asset Condition": "Good",
+      "Current Assignee": "Alex Tan",
     },
   },
   {
@@ -27,8 +33,11 @@ const SEED: AssetMeta[] = [
     serialNumber: "",
     extra: {
       Category: "Desktop",
-      Location: "HQ / Accounts",
+      Location: "KL Office",
       "Asset Tag": "IT-2210",
+      "Current Status": "Assigned",
+      "Asset Condition": "Fair",
+      "Current Assignee": "Priya Nair",
     },
   },
   {
@@ -37,8 +46,11 @@ const SEED: AssetMeta[] = [
     serialNumber: "CN-0M3T6-74261",
     extra: {
       Category: "Monitor",
-      Location: "HQ / Design",
+      Location: "Penang HQ",
       "Asset Tag": "IT-3302",
+      "Current Status": "Available",
+      "Asset Condition": "New",
+      "Current Assignee": "",
     },
   },
   {
@@ -47,8 +59,11 @@ const SEED: AssetMeta[] = [
     serialNumber: "",
     extra: {
       Category: "Phone",
-      Location: "Warehouse A",
+      Location: "Vietnam",
       "Asset Tag": "WH-014",
+      "Current Status": "Available",
+      "Asset Condition": "Good",
+      "Current Assignee": "",
     },
   },
   {
@@ -57,8 +72,11 @@ const SEED: AssetMeta[] = [
     serialNumber: "",
     extra: {
       Category: "Tablet",
-      Location: "Field",
+      Location: "Philippines",
       "Asset Tag": "SL-203",
+      "Current Status": "Reserved",
+      "Asset Condition": "Good",
+      "Current Assignee": "",
     },
   },
   {
@@ -67,8 +85,11 @@ const SEED: AssetMeta[] = [
     serialNumber: "ZBR23018445",
     extra: {
       Category: "Scanner",
-      Location: "Warehouse A / Dock",
+      Location: "Penang HQ",
       "Asset Tag": "WH-088",
+      "Current Status": "In Repair",
+      "Asset Condition": "Faulty",
+      "Current Assignee": "",
     },
   },
   {
@@ -77,8 +98,11 @@ const SEED: AssetMeta[] = [
     serialNumber: "",
     extra: {
       Category: "Printer",
-      Location: "HQ / Print Room",
+      Location: "KL Office",
       "Asset Tag": "IT-4411",
+      "Current Status": "Available",
+      "Asset Condition": "Good",
+      "Current Assignee": "",
     },
   },
   {
@@ -87,8 +111,11 @@ const SEED: AssetMeta[] = [
     serialNumber: "FCW2432L09K",
     extra: {
       Category: "Network",
-      Location: "HQ / Comms closet",
+      Location: "Penang HQ",
       "Asset Tag": "NET-012",
+      "Current Status": "Assigned",
+      "Asset Condition": "Good",
+      "Current Assignee": "Wei Ming",
     },
   },
   {
@@ -97,8 +124,11 @@ const SEED: AssetMeta[] = [
     serialNumber: "",
     extra: {
       Category: "AV",
-      Location: "HQ / Meeting Room A",
+      Location: "Penang HQ",
       "Asset Tag": "AV-007",
+      "Current Status": "Available",
+      "Asset Condition": "Fair",
+      "Current Assignee": "",
     },
   },
   {
@@ -107,8 +137,11 @@ const SEED: AssetMeta[] = [
     serialNumber: "",
     extra: {
       Category: "Power",
-      Location: "HQ / Server room",
+      Location: "Penang HQ",
       "Asset Tag": "PWR-003",
+      "Current Status": "Disposal",
+      "Asset Condition": "Damaged",
+      "Current Assignee": "",
     },
   },
   {
@@ -117,8 +150,11 @@ const SEED: AssetMeta[] = [
     serialNumber: "2148LZ0A8B8",
     extra: {
       Category: "AV",
-      Location: "HQ / Boardroom",
+      Location: "Penang HQ",
       "Asset Tag": "AV-021",
+      "Current Status": "Available",
+      "Asset Condition": "Good",
+      "Current Assignee": "",
     },
   },
 ];
@@ -158,4 +194,31 @@ export function updateMockSerial(recordId: string, serialNumber: string) {
   const previousSerial = asset.serialNumber;
   asset.serialNumber = serialNumber;
   return { asset: { ...asset, extra: { ...asset.extra } }, previousSerial };
+}
+
+export function getMockAsset(recordId: string) {
+  const asset = store().assets.find((item) => item.recordId === recordId);
+  if (!asset) throw new Error("Asset not found in the demo Asset Register.");
+  return { ...asset, extra: { ...asset.extra } };
+}
+
+export function updateMockAssignment(
+  recordId: string,
+  update: {
+    assigneeName: string;
+    status: string;
+    location: string;
+    condition: string;
+  }
+) {
+  const asset = store().assets.find((item) => item.recordId === recordId);
+  if (!asset) throw new Error("Asset not found in the demo Asset Register.");
+  asset.extra = {
+    ...asset.extra,
+    "Current Assignee": update.assigneeName,
+    "Current Status": update.status,
+    Location: update.location,
+    "Asset Condition": update.condition,
+  };
+  return { ...asset, extra: { ...asset.extra } };
 }
