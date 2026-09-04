@@ -907,9 +907,19 @@ export function HandoverDesk({
                 : "Review what will be written to Lark."}
             </DialogDescription>
           </DialogHeader>
+          {basket.length > 1 ? (
+            <ul className="space-y-1 text-sm">
+              {basket.map((item) => (
+                <li key={item.asset.recordId} className="text-muted-foreground">
+                  {handoverAssetLabel(item.asset.assetId, item.asset.name)}
+                  {item.condition ? ` · ${item.condition}` : ""}
+                </li>
+              ))}
+            </ul>
+          ) : null}
           <ul className="max-h-64 space-y-1.5 overflow-auto rounded-lg bg-muted/60 p-3 text-sm">
-            {preview.map((change) => (
-              <li key={change} className="flex gap-2">
+            {preview.map((change, index) => (
+              <li key={`${change}-${index}`} className="flex gap-2">
                 <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-400" />
                 <span>{change}</span>
               </li>

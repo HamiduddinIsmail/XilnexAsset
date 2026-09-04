@@ -1,12 +1,15 @@
 # Asset serial updater
 
-A small web app for writing asset serial numbers into a Lark Base **Asset Register** without typing them by hand.
+A small web app for Xilnex staff to work Asset Register data in Lark Base without typing serials by hand.
 
-1. Search and select the asset (loaded from Lark Base).
-2. Scan a barcode / QR code with the camera, take a photo of a printed serial, or use a USB / Bluetooth scanner.
-3. Review the value, then submit. The app updates only that record’s serial field.
+After the PIN, you land on the **asset desk** and pick a tool:
 
-Until a Base is connected, the app runs in **demo mode** against a sample Asset Register so you can try the flow immediately.
+1. **Asset Handover** — hand several assets (laptop, mouse, bag, …) to one person in a single confirm.
+2. **Asset Return** — take assigned or loaned assets back into stock.
+3. **Asset Maintenance** — move Open jobs to In Progress, then Completed.
+4. **Serial Number Updater** — write a barcode or printed serial onto the matching Asset Register row.
+
+Until a Base is connected, the app runs in **demo mode** against sample tables so you can try the flows immediately.
 
 ## Run locally
 
@@ -35,8 +38,6 @@ If you forget the PIN on Netlify, unlock is impossible until you delete the `app
 
 ## Connect Lark Base (admin)
 
-## Connect Lark Base (admin)
-
 Admins connect a Base from the app. No `.env` edit is required after that.
 
 1. Open **Setup** (gear) on the scanner page, or go to `/setup`.
@@ -58,11 +59,13 @@ Create a custom app in the [Lark Developer Console](https://open.larksuite.com/a
 1. Copy **App ID** and **App Secret**.
 2. Add a capability / permission for Base:
    - `base:record:retrieve` (search records)
-   - `base:record:update` (update a record)  
+   - `base:record:update` (update a record)
+   - `base:record:create` (new Transaction Log rows on handover)
    or the broader `bitable:app` scope.
 3. Publish a version of the app so the scopes take effect.
-4. Open your Asset Register Base → **…** → **Add application** / collaborate, and grant the app **edit** access. The test fails if the app is not a collaborator.
-5. Copy the browser URL while the Asset Register is open:
+4. In **Contacts permission** (not only app availability), set the range to **All employees**. Handover reads the company directory from this setting. Then publish a version of the app.
+5. Open your Asset Register Base → **…** → **Add application** / collaborate, and grant the app **edit** access. The test fails if the app is not a collaborator.
+6. Copy the browser URL while the Asset Register is open:
 
    `https://<tenant>.larksuite.com/base/<APP_TOKEN>?table=<TABLE_ID>`
 
@@ -86,10 +89,44 @@ Anyone who can open `/setup` can change the connection. Run this app on a truste
 
 The first visit opens a welcome screen. Create a **4-digit PIN**. After that, the link alone cannot read or change Lark data.
 
-- Enter the PIN to unlock Serials, Maintenance, and Setup for 12 hours on that browser.
+- Enter the PIN to unlock the asset desk (Handover, Return, Maintenance, Serials, and Setup) for 12 hours on that browser.
 - Tap **Lock** in the header when you walk away.
 - Change the PIN later in **Setup**.
 - If the PIN is forgotten locally, delete `data/app-lock.json` and create a new one. On Netlify, delete the `app-lock` blob instead.
+
+## Asset handover
+
+Open **Handover** in the header. This is the desk version of the old Lark Approval form — scan first, not a long dropdown of every asset.
+
+You can hand several assets to the same person in one confirm (for example a laptop, mouse, and bag).
+
+1. Pick **Handover To** from the company directory (search by name or email). If the list is short, the custom app’s **Contacts permission** is not set to all employees — change that in Lark Admin, publish a new app version, then Refresh.
+2. Scan serials or tap assets to add them to the handover list. Repair, disposal, missing, spoiled, and trade-in stock cannot be handed over. Each line has its own condition (New, Good, or Fair).
+3. Set shared details once: date, location, assignment type, and reason. Temporary assignments also ask for an expected return date.
+4. Collect **one** employee signature for the whole list (QR on their phone, or Open on this screen). Review stays locked until they sign.
+5. Review the changes and submit.
+
+The app then, for **each** asset in the list:
+
+- Sets **Current Assignee**, **Current Status** (`Assigned`, or `Loan` for temporary), **Location**, and **Asset Condition** on **1. Asset Register**
+- Adds a row to **2. Transaction Log** with type **Handover**, **Transfer** (if someone already held it), or **Loan**, **Approval Status = Approved**, and **Assignment Status = Active**
+
+There is no Lark approval chain. The person at the desk is the handover.
+
+## Asset return
+
+Open **Return** in the header. Scan first; you can queue several assets and confirm once.
+
+1. Scan or tap **Assigned** or **Loan** stock. The holder is taken from **Current Assignee** — there is no employee picker.
+2. Set return reason and condition on each item. Shared date and location apply to the whole batch.
+3. Tick acknowledgement, review, and submit.
+
+The app then, for each asset:
+
+- Clears **Current Assignee**
+- Sets **Current Status** to **Available**, or **In Repair** if the reason is Return for Repair, or **Missing** if the condition is Missing
+- Sets **Location** and **Asset Condition** (except Missing, which only changes status)
+- Adds a **Return** row on **2. Transaction Log** with **Assignment Status = Returned** and **Approval Status = Approved**
 
 ## Maintenance desk
 

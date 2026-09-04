@@ -16,9 +16,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Xilnex · Asset serial updater",
+  title: "Xilnex · Asset desk",
   description:
-    "Scan serials into Lark Base, and move Maintenance Log jobs from Open to In Progress to Completed.",
+    "Scan serials, hand assets to staff, take them back, and move Maintenance Log jobs in Lark Base.",
   icons: {
     icon: "/xilnex-logo.jpg",
     apple: "/xilnex-logo.jpg",
