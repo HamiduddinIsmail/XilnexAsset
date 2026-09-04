@@ -371,7 +371,7 @@ export function MaintenanceDesk({
           if (!open && !submitting) setPending(null);
         }}
       >
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="flex max-h-[min(90dvh,40rem)] flex-col overflow-hidden sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{pending ? maintenanceActionLabel(pending) : "Confirm"}</DialogTitle>
             <DialogDescription>
@@ -381,7 +381,7 @@ export function MaintenanceDesk({
             </DialogDescription>
           </DialogHeader>
           {pending ? (
-            <div className="space-y-4">
+            <div className="min-h-0 space-y-4 overflow-y-auto">
               {workshopPending && pending.nextAction === "start" ? (
                 <div className="grid gap-3">
                   <div className="grid gap-1.5">
@@ -404,7 +404,7 @@ export function MaintenanceDesk({
                       step="0.01"
                       value={cost}
                       onChange={(event) => setCost(event.target.value)}
-                      placeholder="0.00"
+                      placeholder="Amount"
                     />
                   </div>
                   <p className="text-xs text-muted-foreground">Start Date is set automatically.</p>
