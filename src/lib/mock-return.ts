@@ -126,6 +126,7 @@ export function submitMockReturn(input: ReturnSubmitInput): ReturnResult {
         assigneeKept: keepHolder,
         maintenanceCreated: openMaintenance,
         maintenanceType,
+        signatureAttached: true,
       })
     );
     if (maintenanceId) changes.push(`Maintenance ${maintenanceId} opened`);

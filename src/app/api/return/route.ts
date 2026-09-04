@@ -32,6 +32,8 @@ export async function POST(request: Request) {
       message.includes("blocked") ||
       message.includes("already") ||
       message.includes("acknowledgement") ||
+      message.includes("must sign") ||
+      message.includes("signature") ||
       message.includes("Scan or add") ||
       message.includes("twice") ||
       message.includes("missing")

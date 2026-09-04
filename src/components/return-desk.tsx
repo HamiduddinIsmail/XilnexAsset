@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
   Loader2,
+  PenLine,
+  QrCode,
   ScanLine,
   Search,
   Trash2,
@@ -50,6 +52,7 @@ import {
   needsMaintenanceJob,
   nextStatusAfterReturn,
   returnItemHint,
+  signerForReturnAssets,
   type ReturnHolder,
 } from "@/lib/return-shared";
 import { handoverAssetLabel } from "@/lib/handover-shared";
@@ -174,9 +177,93 @@ export function ReturnDesk({
   const [returnDate, setReturnDate] = useState(todayISO);
   const [remarks, setRemarks] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
+  const [signOpen, setSignOpen] = useState(false);
+  const [signBusy, setSignBusy] = useState(false);
+  const [signToken, setSignToken] = useState("");
+  const [signUrl, setSignUrl] = useState("");
+  const [qrDataUrl, setQrDataUrl] = useState("");
+  const [signaturePreview, setSignaturePreview] = useState<string | null>(null);
+  const [signError, setSignError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [lastResult, setLastResult] = useState<ReturnResult | null>(null);
+
+  const signer = useMemo(() => signerForReturnAssets(basket.map((item) => item.asset)), [basket]);
+  const basketKey = basket.map((item) => item.asset.recordId).join(",");
+
+  useEffect(() => {
+    setAcknowledged(false);
+    setSignToken("");
+    setSignUrl("");
+    setQrDataUrl("");
+    setSignaturePreview(null);
+    setSignError(null);
+  }, [basketKey]);
+
+  useEffect(() => {
+    if (!signOpen || !signToken || acknowledged) return;
+    let cancelled = false;
+    async function tick() {
+      try {
+        const response = await fetch(`/api/handover/sign/${signToken}`, { cache: "no-store" });
+        const body = (await response.json()) as {
+          signed?: boolean;
+          signatureDataUrl?: string;
+        };
+        if (cancelled || !response.ok || !body.signed) return;
+        setAcknowledged(true);
+        setSignaturePreview(body.signatureDataUrl ?? null);
+        setSignOpen(false);
+        toast.success(`${signer?.name || "Employee"} signed. You can review the return.`);
+      } catch {
+        /* keep waiting */
+      }
+    }
+    void tick();
+    const timer = window.setInterval(() => void tick(), 1500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [acknowledged, signOpen, signToken, signer?.name]);
+
+  async function startSignature() {
+    if (!basket.length) {
+      toast.error("Add assets to the return list first.");
+      return;
+    }
+    if (!signer) {
+      toast.error("All assets in this return must belong to the same person before they sign.");
+      return;
+    }
+    setSignBusy(true);
+    setSignError(null);
+    setAcknowledged(false);
+    setSignaturePreview(null);
+    setSignOpen(true);
+    try {
+      const response = await fetch("/api/return/sign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          assetRecordIds: basket.map((item) => item.asset.recordId),
+        }),
+      });
+      const body = (await response.json()) as { token?: string; signPath?: string; error?: string };
+      if (!response.ok || !body.token || !body.signPath) {
+        throw new Error(body.error || "Could not create a signing QR.");
+      }
+      const url = `${window.location.origin}${body.signPath}`;
+      setSignToken(body.token);
+      setSignUrl(url);
+      const QRCode = (await import("qrcode")).default;
+      setQrDataUrl(await QRCode.toDataURL(url, { width: 280, margin: 1, errorCorrectionLevel: "M" }));
+    } catch (error) {
+      setSignError(error instanceof Error ? error.message : "Could not create a signing QR.");
+    } finally {
+      setSignBusy(false);
+    }
+  }
 
   async function load() {
     setLoadError(null);
@@ -285,7 +372,7 @@ export function ReturnDesk({
   }
 
   useHardwareScanner({
-    enabled: !scanOpen && !confirmOpen,
+    enabled: !scanOpen && !confirmOpen && !signOpen,
     onScan: (value) => void lookupSerial(value),
   });
 
@@ -302,6 +389,7 @@ export function ReturnDesk({
       assigneeKept: keepsAssignee(item.reason),
       maintenanceCreated: needsMaintenanceJob(item.reason, item.condition),
       maintenanceType: maintenanceTypeForReturn(item.reason),
+      signatureAttached: true,
     })
   );
 
@@ -310,7 +398,8 @@ export function ReturnDesk({
     Boolean(location) &&
     Boolean(returnDate) &&
     basket.every((item) => item.reason && item.condition) &&
-    acknowledged;
+    acknowledged &&
+    Boolean(signer);
 
   async function confirmSubmit() {
     setSubmitting(true);
@@ -328,6 +417,7 @@ export function ReturnDesk({
           returnDate,
           remarks,
           acknowledged,
+          signatureToken: signToken,
         }),
       });
       const body = (await response.json()) as ReturnResult & { error?: string };
@@ -336,6 +426,8 @@ export function ReturnDesk({
       setConfirmOpen(false);
       setBasket([]);
       setAcknowledged(false);
+      setSignToken("");
+      setSignaturePreview(null);
       setRemarks("");
       toast.success(body.summary, {
         description:
@@ -362,7 +454,7 @@ export function ReturnDesk({
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
       <DeskHeader
         title="Asset return"
-        description="Filter by who holds the assets, or scan a serial. Resignation and Project End clear the assignee. Repair and Upgrade keep them and open a maintenance job."
+        description="Filter by who holds the assets, then collect their signature before you confirm. Resignation and Project End clear the assignee. Repair and Upgrade keep them and open a maintenance job."
         mode={payload?.mode}
         loading={loading}
         onRefresh={() => {
@@ -699,35 +791,52 @@ export function ReturnDesk({
                   />
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setAcknowledged((value) => !value)}
-                  className={cn(
-                    "w-full rounded-xl border p-3 text-left text-sm transition-colors",
-                    acknowledged
-                      ? "border-transparent bg-[var(--brand)]/25"
-                      : "border-border bg-background/40"
-                  )}
-                >
-                  <span className="flex items-start gap-2">
-                    <span
-                      className={cn(
-                        "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md border",
-                        acknowledged && "border-transparent bg-[var(--brand)] text-white"
-                      )}
-                    >
-                      {acknowledged ? <CheckCircle2 className="size-4" /> : null}
-                    </span>
-                    <span>
-                      <span className="block font-medium">Return acknowledgement</span>
-                      <span className="mt-1 block text-muted-foreground">
-                        The employee is returning the assigned company asset(s) in the condition
-                        stated here. Damaged or missing items may be inspected or repaired
-                        under company policy.
+                {acknowledged && signaturePreview ? (
+                  <div className="space-y-3 rounded-xl border bg-[var(--brand)]/15 p-3">
+                    <p className="flex items-center gap-2 text-sm font-medium">
+                      <CheckCircle2 className="size-4" />
+                      Signed by {signer?.name}
+                    </p>
+                    <img
+                      src={signaturePreview}
+                      alt={`${signer?.name || "Employee"} signature`}
+                      className="w-full rounded-lg bg-white"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Confirm writes this PNG onto the Transaction Log Signature attachment for every
+                      asset in the list.
+                    </p>
+                    <Button type="button" variant="outline" size="sm" onClick={() => void startSignature()}>
+                      <PenLine className="size-3.5" />
+                      Collect a new signature
+                    </Button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void startSignature()}
+                    className="w-full rounded-xl border border-border bg-background/40 p-3 text-left text-sm transition-colors hover:bg-muted"
+                  >
+                    <span className="flex items-start gap-2">
+                      <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md border">
+                        <QrCode className="size-3.5" />
+                      </span>
+                      <span>
+                        <span className="block font-medium">Employee acknowledgement</span>
+                        <span className="mt-1 block text-muted-foreground">
+                          One QR covers every asset in this list. {signer?.name || "The holder"} signs
+                          once on their phone.
+                        </span>
                       </span>
                     </span>
-                  </span>
-                </button>
+                  </button>
+                )}
+
+                {!signer && basket.length > 1 ? (
+                  <p className="text-sm text-destructive">
+                    These assets belong to more than one person. Split the return so each holder can sign.
+                  </p>
+                ) : null}
 
                 <Button
                   type="button"
@@ -738,6 +847,11 @@ export function ReturnDesk({
                 >
                   Review return
                 </Button>
+                {!acknowledged && basket.length > 0 && signer ? (
+                  <p className="text-center text-xs text-muted-foreground">
+                    Review stays locked until {signer.name} saves a signature.
+                  </p>
+                ) : null}
               </>
             )}
           </CardContent>
@@ -782,6 +896,57 @@ export function ReturnDesk({
         }}
       />
 
+      <Dialog open={signOpen} onOpenChange={(open) => !signBusy && setSignOpen(open)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Employee signature</DialogTitle>
+            <DialogDescription>
+              {signer
+                ? `Ask ${signer.name} to scan this QR on their phone and sign.`
+                : "Ask the employee to scan this QR on their phone and sign."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-3">
+            {signBusy ? (
+              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" />
+                Preparing the signing page…
+              </p>
+            ) : qrDataUrl ? (
+              <img src={qrDataUrl} alt="Signing QR code" className="size-56 rounded-xl bg-white p-2" />
+            ) : null}
+            {signUrl ? (
+              <p className="w-full break-all rounded-lg bg-muted/60 px-3 py-2 text-center text-xs text-muted-foreground">
+                {signUrl}
+              </p>
+            ) : null}
+            {signUrl.includes("://127.0.0.1") || signUrl.includes("://localhost") ? (
+              <p className="text-center text-xs text-muted-foreground">
+                A phone cannot open 127.0.0.1. Use this on the live site, or open the signing page
+                on this screen.
+              </p>
+            ) : null}
+            {signError ? <p className="text-sm text-destructive">{signError}</p> : null}
+            {!acknowledged && !signBusy ? (
+              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="size-3.5 animate-spin" />
+                Waiting for the signature…
+              </p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            {signUrl ? (
+              <Button type="button" variant="outline" onClick={() => window.open(signUrl, "_blank")}>
+                Open on this screen
+              </Button>
+            ) : null}
+            <Button type="button" variant="outline" disabled={signBusy} onClick={() => setSignOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={confirmOpen} onOpenChange={(open) => !open && !submitting && setConfirmOpen(false)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -810,6 +975,16 @@ export function ReturnDesk({
               </li>
             ))}
           </ul>
+          {signaturePreview ? (
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium">Employee signature</p>
+              <img
+                src={signaturePreview}
+                alt="Employee signature"
+                className="w-full rounded-lg bg-white"
+              />
+            </div>
+          ) : null}
           <DialogFooter>
             <Button type="button" variant="outline" disabled={submitting} onClick={() => setConfirmOpen(false)}>
               Cancel

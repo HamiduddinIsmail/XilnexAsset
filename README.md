@@ -132,9 +132,12 @@ Condition on return is **Good**, **Fair**, **Damaged**, or **Missing** (no Fault
 
 If the reason is Repair or Upgrade, or the condition is **Damaged**, the desk also creates an Open maintenance job (Damaged uses Repair unless the reason is Upgrade). Damaged plus Resignation or Project End still clears the assignee and sets status to **In Repair**.
 
+Collect **one** employee signature for the whole list (QR on their phone, or Open on this screen). Review stays locked until they sign.
+
 The app then, for each asset:
 
 - Writes a **Return** row on **2. Transaction Log** (**Assignment Status = Returned**, **Approval Status = Approved**)
+- Attaches the signature PNG on the **Signature** field of that row
 - Updates **Current Status**, **Location**, and **Asset Condition** on **1. Asset Register**
 - Clears **Current Assignee** unless the reason is Repair or Upgrade
 - Opens **3. Maintenance Log** when repair, upgrade, or damaged applies

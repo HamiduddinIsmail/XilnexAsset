@@ -166,6 +166,7 @@ export type ReturnSubmitInput = {
   returnDate: string;
   remarks: string;
   acknowledged: boolean;
+  signatureToken?: string;
 };
 
 export type ReturnResult = {

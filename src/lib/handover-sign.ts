@@ -13,10 +13,13 @@ export type HandoverSignAsset = {
   serialNumber: string;
 };
 
+export type SignKind = "handover" | "return";
+
 export type HandoverSignSession = {
   token: string;
   createdAt: string;
   expiresAt: string;
+  kind?: SignKind;
   assets: HandoverSignAsset[];
   staffId: string;
   staffName: string;
@@ -28,6 +31,7 @@ export type HandoverSignSession = {
 export type HandoverSignPublic = {
   token: string;
   expiresAt: string;
+  kind: SignKind;
   assets: HandoverSignAsset[];
   staffName: string;
   signed: boolean;
@@ -60,6 +64,7 @@ function toPublic(session: HandoverSignSession, includeSignature = false): Hando
   return {
     token: session.token,
     expiresAt: session.expiresAt,
+    kind: session.kind === "return" ? "return" : "handover",
     assets: sessionAssets(session),
     staffName: session.staffName,
     signed: Boolean(session.signedAt && session.signatureDataUrl),
@@ -94,6 +99,7 @@ export async function createHandoverSignSession(input: {
   staffId: string;
   staffName: string;
   staffEmail: string;
+  kind?: SignKind;
 }): Promise<HandoverSignPublic> {
   if (!input.assets.length) throw new Error("Add at least one asset before collecting a signature.");
   const store = await readStore();
@@ -103,6 +109,7 @@ export async function createHandoverSignSession(input: {
     token,
     createdAt: now.toISOString(),
     expiresAt: new Date(now.getTime() + SESSION_MS).toISOString(),
+    kind: input.kind ?? "handover",
     assets: input.assets,
     staffId: input.staffId,
     staffName: input.staffName,
@@ -177,6 +184,40 @@ export async function assertHandoverSignature(input: {
   }
   if (isExpired(session) && !session.signedAt) {
     throw new Error("That signature request expired. Ask the employee to sign again.");
+  }
+  if (session.kind === "return") {
+    throw new Error("That signature is for a return, not a handover. Collect a new one.");
+  }
+  if (session.staffId !== input.staffId) {
+    throw new Error("That signature is for a different person. Collect a new one.");
+  }
+  const signedIds = sessionAssets(session)
+    .map((asset) => asset.recordId)
+    .sort();
+  const basketIds = input.items.map((item) => item.assetRecordId).sort();
+  if (signedIds.join("|") !== basketIds.join("|")) {
+    throw new Error("That signature is for a different set of assets. Collect a new one.");
+  }
+  return session;
+}
+
+export async function assertReturnSignature(input: {
+  signatureToken?: string;
+  staffId: string;
+  items: Array<{ assetRecordId: string }>;
+}) {
+  if (!input.signatureToken) {
+    throw new Error("The employee must sign before you can complete this return.");
+  }
+  const session = await getHandoverSignSession(input.signatureToken);
+  if (!session || !session.signedAt || !session.signatureDataUrl) {
+    throw new Error("The employee must sign before you can complete this return.");
+  }
+  if (isExpired(session) && !session.signedAt) {
+    throw new Error("That signature request expired. Ask the employee to sign again.");
+  }
+  if (session.kind !== "return") {
+    throw new Error("That signature is for a handover, not a return. Collect a new one.");
   }
   if (session.staffId !== input.staffId) {
     throw new Error("That signature is for a different person. Collect a new one.");

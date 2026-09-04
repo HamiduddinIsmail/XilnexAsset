@@ -72,14 +72,16 @@ export function HandoverSignForm({ token }: { token: string }) {
         />
         <div>
           <p className="text-sm font-medium tracking-wide text-white/90">Xilnex Holdings</p>
-          <h1 className="font-heading text-2xl font-semibold tracking-tight">Sign to receive</h1>
+          <h1 className="font-heading text-2xl font-semibold tracking-tight">
+            {session?.kind === "return" ? "Sign to return" : loading ? "Sign" : "Sign to receive"}
+          </h1>
         </div>
       </div>
 
       {loading ? (
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="size-4 animate-spin" />
-          Opening the handover…
+            Opening the acknowledgement…
         </p>
       ) : error && !session ? (
         <p className="rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm">{error}</p>
@@ -91,10 +93,12 @@ export function HandoverSignForm({ token }: { token: string }) {
           </p>
           <p className="text-sm text-muted-foreground">
             {session.staffName} acknowledged{" "}
+            {session.kind === "return" ? "return of " : ""}
             {session.assets.length === 1
               ? session.assets[0].name
               : `${session.assets.length} assets`}
-            . You can close this page. The admin can now review the handover.
+            . You can close this page. The admin can now review the{" "}
+            {session.kind === "return" ? "return" : "handover"}.
           </p>
           {session.signatureDataUrl ? (
             <img
@@ -118,8 +122,9 @@ export function HandoverSignForm({ token }: { token: string }) {
               ))}
             </ul>
             <p className="mt-3 text-muted-foreground">
-              Sign below to confirm you received {session.assets.length === 1 ? "this company asset" : "these company assets"} and will use {session.assets.length === 1 ? "it" : "them"} under company
-              policy.
+              {session.kind === "return"
+                ? `Sign below to confirm you are returning ${session.assets.length === 1 ? "this company asset" : "these company assets"} in the condition stated at the desk.`
+                : `Sign below to confirm you received ${session.assets.length === 1 ? "this company asset" : "these company assets"} and will use ${session.assets.length === 1 ? "it" : "them"} under company policy.`}
             </p>
           </div>
           <div className="space-y-2">

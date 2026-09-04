@@ -132,8 +132,8 @@ export function validateReturnInput(input: ReturnSubmitInput) {
   if (!input.location) throw new Error("Pick a return location.");
   if (!input.returnDate) throw new Error("Pick the return date.");
   dateToMillis(input.returnDate);
-  if (!input.acknowledged) {
-    throw new Error("Tick the acknowledgement before completing the return.");
+  if (!input.acknowledged || !input.signatureToken) {
+    throw new Error("The employee must sign before you can complete this return.");
   }
 }
 
@@ -149,6 +149,7 @@ export function describeReturnChanges(input: {
   assigneeKept?: boolean;
   maintenanceCreated?: boolean;
   maintenanceType?: string;
+  signatureAttached?: boolean;
 }) {
   const asset = handoverAssetLabel(input.assetId ?? "", input.assetName);
   const changes = [
@@ -169,6 +170,7 @@ export function describeReturnChanges(input: {
   if (input.maintenanceCreated) {
     changes.push(`Maintenance Log · ${input.maintenanceType || "Repair"} job opened`);
   }
+  if (input.signatureAttached) changes.push("Signature PNG attached on Transaction Log");
   changes.push("Received by Admin team");
   return changes;
 }
@@ -191,6 +193,18 @@ export type ReturnHolder = {
   outCount: number;
   totalCount: number;
 };
+
+export function signerForReturnAssets(assets: HandoverAsset[]) {
+  if (!assets.length) return null;
+  const keys = new Set(assets.map((asset) => holderKeyForAsset(asset)).filter(Boolean));
+  if (keys.size !== 1) return null;
+  const first = assets[0];
+  return {
+    staffId: first.assigneeId || holderKeyForAsset(first),
+    name: first.assigneeName.trim() || "Employee",
+    email: first.assigneeEmail,
+  };
+}
 
 export function holderKeyForAsset(asset: HandoverAsset) {
   if (asset.assigneeId) return `id:${asset.assigneeId}`;

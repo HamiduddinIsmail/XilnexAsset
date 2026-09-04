@@ -6,9 +6,16 @@ import {
   millisToDate,
   userField,
 } from "@/lib/handover-shared";
+import {
+  assertReturnSignature,
+  pngBytesFromDataUrl,
+  signatureAttachmentName,
+} from "@/lib/handover-sign";
 import { getHandoverDesk, invalidateHandoverCache } from "@/lib/handover";
 import {
+  attachmentFieldValue,
   createTableRecord,
+  ensureAttachmentField,
   ensureSelectOptions,
   getLarkSession,
   getTableRecord,
@@ -17,6 +24,7 @@ import {
   pickField,
   searchTableRecords,
   updateTableRecord,
+  uploadBitableFile,
 } from "@/lib/lark";
 import { createMaintenanceFromReturn, invalidateMaintenanceCache } from "@/lib/maintenance";
 import {
@@ -36,6 +44,7 @@ import {
   nextStatusAfterReturn,
   pickReturnConditions,
   pickReturnReasons,
+  signerForReturnAssets,
   toReturnAsset,
   validateReturnInput,
 } from "@/lib/return-shared";
@@ -77,6 +86,7 @@ type ReturnContext = {
     assignmentStatus: string | null;
     conditionOnReturn: string | null;
     remarks: string | null;
+    signature: string;
     createdTime: string | null;
   };
 };
@@ -156,6 +166,12 @@ async function resolveReturnContext(): Promise<ReturnContext> {
       assignmentStatus: pickOptional(txnNames, ["assignment status"]),
       conditionOnReturn: pickOptional(txnNames, ["condition on return"]),
       remarks: pickOptional(txnNames, ["remarks", "remark"]),
+      signature: (
+        await ensureAttachmentField(session.token, session.appToken, txnTable.table_id, {
+          name: "Signature",
+          aliases: ["employee signature", "acknowledgement signature"],
+        })
+      ).name,
       createdTime: pickOptional(txnNames, ["created time"]),
     },
   };
@@ -288,10 +304,23 @@ export async function lookupReturnAsset(rawSerial: string): Promise<HandoverAsse
   return asset;
 }
 
-async function submitLarkReturn(input: ReturnSubmitInput): Promise<ReturnResult> {
+async function submitLarkReturn(
+  input: ReturnSubmitInput,
+  signatureDataUrl: string,
+  staffName: string,
+  signedAt: string
+): Promise<ReturnResult> {
   validateReturnInput(input);
   const ctx = await resolveReturnContext();
   const when = dateToMillis(input.returnDate);
+  const png = pngBytesFromDataUrl(signatureDataUrl);
+  const fileToken = await uploadBitableFile({
+    token: ctx.token,
+    appToken: ctx.appToken,
+    fileName: signatureAttachmentName(staffName, signedAt),
+    bytes: png,
+  });
+  const signatureCell = attachmentFieldValue(fileToken);
   const transactionIds: string[] = [];
   const maintenanceIds: string[] = [];
   const changes: string[] = [];
@@ -323,6 +352,7 @@ async function submitLarkReturn(input: ReturnSubmitInput): Promise<ReturnResult>
     if (ctx.txnFields.assignmentStatus) txnFields[ctx.txnFields.assignmentStatus] = "Returned";
     if (ctx.txnFields.conditionOnReturn) txnFields[ctx.txnFields.conditionOnReturn] = item.condition;
     if (ctx.txnFields.remarks && input.remarks.trim()) txnFields[ctx.txnFields.remarks] = input.remarks.trim();
+    if (ctx.txnFields.signature) txnFields[ctx.txnFields.signature] = signatureCell;
 
     const created = await createTableRecord(ctx.token, ctx.appToken, ctx.txnTableId, txnFields);
 
@@ -374,6 +404,7 @@ async function submitLarkReturn(input: ReturnSubmitInput): Promise<ReturnResult>
         assigneeKept: keepHolder,
         maintenanceCreated: openMaintenance,
         maintenanceType,
+        signatureAttached: true,
       })
     );
     if (maintenanceId) {
@@ -393,9 +424,32 @@ async function submitLarkReturn(input: ReturnSubmitInput): Promise<ReturnResult>
 
 export async function submitReturn(input: ReturnSubmitInput): Promise<ReturnResult> {
   validateReturnInput(input);
+  const desk = await getReturnDesk();
+  const assets = input.items.map((item) => {
+    const asset = desk.assets.find((row) => row.recordId === item.assetRecordId);
+    if (!asset) throw new Error("An asset in the basket was not found in the register.");
+    return asset;
+  });
+  const signer = signerForReturnAssets(assets);
+  if (!signer) {
+    throw new Error("All assets in this return must belong to the same person before they sign.");
+  }
+  const signed = await assertReturnSignature({
+    signatureToken: input.signatureToken,
+    staffId: signer.staffId,
+    items: input.items,
+  });
+  if (!signed.signatureDataUrl) {
+    throw new Error("The employee must sign before you can complete this return.");
+  }
+  const signedNote = `Employee signed ${signed.signedAt} (${signed.staffName}). PNG stored on Transaction Log Signature.`;
+  const nextInput: ReturnSubmitInput = {
+    ...input,
+    remarks: [input.remarks.trim(), signedNote].filter(Boolean).join("\n"),
+  };
 
   if (!(await isLarkConfigured())) {
-    const result = submitMockReturn(input);
+    const result = submitMockReturn(nextInput);
     invalidateReturnCache();
     invalidateHandoverCache();
     invalidateAssetsCache();
@@ -403,7 +457,12 @@ export async function submitReturn(input: ReturnSubmitInput): Promise<ReturnResu
     return result;
   }
 
-  const result = await submitLarkReturn(input);
+  const result = await submitLarkReturn(
+    nextInput,
+    signed.signatureDataUrl,
+    signed.staffName,
+    signed.signedAt ?? new Date().toISOString()
+  );
   invalidateReturnCache();
   invalidateHandoverCache();
   invalidateAssetsCache();
