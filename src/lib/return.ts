@@ -364,6 +364,7 @@ async function submitLarkReturn(input: ReturnSubmitInput): Promise<ReturnResult>
     changes.push(
       ...describeReturnChanges({
         assetName: asset.name,
+        assetId: asset.assetId,
         previousAssignee: asset.assigneeName,
         nextStatus,
         location: input.location,

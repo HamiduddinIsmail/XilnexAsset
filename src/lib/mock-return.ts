@@ -116,6 +116,7 @@ export function submitMockReturn(input: ReturnSubmitInput): ReturnResult {
     changes.push(
       ...describeReturnChanges({
         assetName: raw.name,
+        assetId: asset.assetId,
         previousAssignee: asset.assigneeName,
         nextStatus,
         location: input.location,

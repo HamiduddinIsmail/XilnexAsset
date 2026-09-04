@@ -52,6 +52,7 @@ import {
   returnItemHint,
   type ReturnHolder,
 } from "@/lib/return-shared";
+import { handoverAssetLabel } from "@/lib/handover-shared";
 import type { HandoverAsset, ReturnPayload, ReturnResult } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -236,7 +237,7 @@ export function ReturnDesk({
     setBasket((items) => [...items, ...next]);
     if (!location) setLocation(next[0].asset.location || payload?.options.locations[0] || "");
     setLastResult(null);
-    toast.success(next.length === 1 ? `Added ${next[0].asset.name}` : `Added ${next.length} assets`);
+    toast.success(next.length === 1 ? `Added ${handoverAssetLabel(next[0].asset.assetId, next[0].asset.name)}` : `Added ${next.length} assets`);
   }
 
   const holders = useMemo(() => listReturnHolders(payload?.assets ?? []), [payload]);
@@ -291,6 +292,7 @@ export function ReturnDesk({
   const preview = basket.flatMap((item) =>
     describeReturnChanges({
       assetName: item.asset.name,
+      assetId: item.asset.assetId,
       previousAssignee: item.asset.assigneeName,
       nextStatus: nextStatusAfterReturn(item.reason, item.condition),
       location,
@@ -395,7 +397,9 @@ export function ReturnDesk({
             {lastResult.maintenanceIds?.length
               ? ` · Maintenance ${lastResult.maintenanceIds.join(", ")}`
               : ""}
-            {lastResult.assets[0] ? ` · ${lastResult.assets[0].name} is ${lastResult.assets[0].currentStatus}` : ""}.
+            {lastResult.assets[0]
+              ? ` · ${handoverAssetLabel(lastResult.assets[0].assetId, lastResult.assets[0].name)} is ${lastResult.assets[0].currentStatus}`
+              : ""}.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -612,7 +616,9 @@ export function ReturnDesk({
                     <li key={item.asset.recordId} className="rounded-xl border p-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <p className="font-medium">{item.asset.name}</p>
+                          <p className="font-medium">
+                            {handoverAssetLabel(item.asset.assetId, item.asset.name)}
+                          </p>
                           <p className="text-xs text-muted-foreground">
                             {[item.asset.serialNumber || "No serial", item.asset.assigneeName || "No holder"]
                               .filter(Boolean)
@@ -782,10 +788,20 @@ export function ReturnDesk({
             <DialogTitle>Confirm return</DialogTitle>
             <DialogDescription>
               {basket.length === 1
-                ? `${basket[0].asset.name} back to ${location || "stock"}`
+                ? `${handoverAssetLabel(basket[0].asset.assetId, basket[0].asset.name)} back to ${location || "stock"}`
                 : `${basket.length} assets back to ${location || "stock"}`}
             </DialogDescription>
           </DialogHeader>
+          {basket.length > 1 ? (
+            <ul className="space-y-1 text-sm">
+              {basket.map((item) => (
+                <li key={item.asset.recordId} className="text-muted-foreground">
+                  {handoverAssetLabel(item.asset.assetId, item.asset.name)}
+                  {item.reason ? ` · ${item.reason}` : ""}
+                </li>
+              ))}
+            </ul>
+          ) : null}
           <ul className="max-h-64 space-y-1.5 overflow-auto rounded-lg bg-muted/60 p-3 text-sm">
             {preview.map((change, index) => (
               <li key={`${change}-${index}`} className="flex gap-2">

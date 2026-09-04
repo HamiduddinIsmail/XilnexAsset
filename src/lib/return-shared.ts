@@ -1,5 +1,5 @@
 import { normalizeKey } from "@/lib/field-value";
-import { dateToMillis } from "@/lib/handover-shared";
+import { dateToMillis, handoverAssetLabel } from "@/lib/handover-shared";
 import type { HandoverAsset, ReturnSubmitInput } from "@/lib/types";
 
 export const RETURN_REASON_CHOICES = [
@@ -139,6 +139,7 @@ export function validateReturnInput(input: ReturnSubmitInput) {
 
 export function describeReturnChanges(input: {
   assetName: string;
+  assetId?: string;
   previousAssignee: string;
   nextStatus: string;
   location: string;
@@ -149,12 +150,13 @@ export function describeReturnChanges(input: {
   maintenanceCreated?: boolean;
   maintenanceType?: string;
 }) {
+  const asset = handoverAssetLabel(input.assetId ?? "", input.assetName);
   const changes = [
     input.assigneeKept && input.previousAssignee
-      ? `${input.assetName} stays with ${input.previousAssignee}`
+      ? `${asset} stays with ${input.previousAssignee}`
       : input.previousAssignee
-        ? `${input.assetName} returned by ${input.previousAssignee}`
-        : `${input.assetName} returned`,
+        ? `${asset} returned by ${input.previousAssignee}`
+        : `${asset} returned`,
     `Current status → ${input.nextStatus}`,
     input.assigneeKept
       ? `Current Assignee kept · ${input.previousAssignee}`
