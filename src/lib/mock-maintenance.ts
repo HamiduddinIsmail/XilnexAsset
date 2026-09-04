@@ -1,10 +1,15 @@
-import type { MaintenanceAction, MaintenanceJob } from "@/lib/types";
+import { isWorkshopJob } from "@/lib/maintenance-copy";
+import type { MaintenanceAction, MaintenanceAdvanceDetails, MaintenanceJob } from "@/lib/types";
 
 type Store = { jobs: MaintenanceJob[] };
 
 const globalStore = globalThis as typeof globalThis & {
   __maintenanceStore?: Store;
 };
+
+function emptyWorkshopFields() {
+  return { vendor: "", cost: null as number | null, result: "" };
+}
 
 function seed(): MaintenanceJob[] {
   return [
@@ -22,6 +27,24 @@ function seed(): MaintenanceJob[] {
       currentStatus: "In Repair",
       assetCondition: "Damaged",
       assignee: "",
+      ...emptyWorkshopFields(),
+      nextAction: "start",
+    },
+    {
+      recordId: "mnt-open-upgrade",
+      maintenanceId: "MNT-00012",
+      type: "Upgrade",
+      status: "Open",
+      priority: "Medium",
+      issue: "Returned for a RAM and SSD upgrade.",
+      assetRecordId: "rec-matebook",
+      assetId: "AST-00009",
+      assetName: "Laptop - Huawei Matebook",
+      serialNumber: "HW-MATE-1009",
+      currentStatus: "In Repair",
+      assetCondition: "Good",
+      assignee: "Alex Tan",
+      ...emptyWorkshopFields(),
       nextAction: "start",
     },
     {
@@ -38,6 +61,7 @@ function seed(): MaintenanceJob[] {
       currentStatus: "Disposal",
       assetCondition: "Damaged",
       assignee: "Alex Tan",
+      ...emptyWorkshopFields(),
       nextAction: "start",
     },
     {
@@ -54,6 +78,9 @@ function seed(): MaintenanceJob[] {
       currentStatus: "In Repair",
       assetCondition: "Faulty",
       assignee: "",
+      vendor: "TechFix KL",
+      cost: 180,
+      result: "",
       nextAction: "complete",
     },
   ];
@@ -95,6 +122,7 @@ export function createMockMaintenanceJob(input: {
     currentStatus: "In Repair",
     assetCondition: "Damaged",
     assignee: input.assigneeName,
+    ...emptyWorkshopFields(),
     nextAction: "start",
   };
   store().jobs.unshift(job);
@@ -105,7 +133,16 @@ export function listMockMaintenanceJobs(): MaintenanceJob[] {
   return store().jobs.map((job) => withNext({ ...job }));
 }
 
-export function advanceMockMaintenance(recordId: string) {
+function parseCost(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value.replace(/,/g, "").trim());
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+export function advanceMockMaintenance(recordId: string, details: MaintenanceAdvanceDetails = {}) {
   const job = store().jobs.find((item) => item.recordId === recordId);
   if (!job) throw new Error("Maintenance job not found in demo data.");
   const action: MaintenanceAction | null =
@@ -114,15 +151,30 @@ export function advanceMockMaintenance(recordId: string) {
     throw new Error(`${job.maintenanceId} is ${job.status} and cannot be advanced from this desk.`);
   }
 
-  if (action === "start") {
+  const workshop = isWorkshopJob(job.type);
+  if (action === "start" && workshop) {
+    const vendor = details.vendor?.trim() ?? "";
+    const cost = parseCost(details.cost);
+    if (!vendor) throw new Error("Enter the vendor before sending this asset out.");
+    if (cost == null) throw new Error("Enter the maintenance cost.");
+    if (cost < 0) throw new Error("Maintenance cost cannot be negative.");
+    job.vendor = vendor;
+    job.cost = cost;
     job.status = "In Progress";
-    if (job.type === "Repair" || job.type === "Upgrade") job.currentStatus = "In Repair";
-  } else {
+    job.currentStatus = "In Repair";
+  } else if (action === "start") {
+    job.status = "In Progress";
+  } else if (workshop) {
+    const result = details.result?.trim() ?? "";
+    if (!result) {
+      throw new Error("Enter the repair result / action taken before marking this complete.");
+    }
+    job.result = result;
     job.status = "Completed";
-    if (job.type === "Repair" || job.type === "Upgrade") {
     job.assetCondition = "Good";
     job.currentStatus = job.assignee ? "Assigned" : "Available";
-  }
+  } else {
+    job.status = "Completed";
   }
 
   return { action, job: withNext({ ...job }) };

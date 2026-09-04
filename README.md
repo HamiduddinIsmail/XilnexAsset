@@ -144,13 +144,13 @@ The app then, for each asset:
 
 ## Maintenance desk
 
-Open **Maintenance** in the header. It lists **3. Maintenance Log** jobs that are **Open** or **In Progress**.
+Open **Maintenance** in the header. It lists **3. Maintenance Log** jobs that are **Open** or **In Progress**. Repair and Upgrade follow the same steps. Disposal can still be started and completed, but extra disposal fields are not collected yet.
 
-1. Review Open jobs (repair or disposal).
-2. When you send the asset out, scan its serial (or tap **Send to repair**). Status becomes **In Progress**, and a repair job sets the asset to **In Repair**.
-3. When the repair is done, scan the same serial. Status becomes **Completed**, condition after maintenance is **Good**, the asset condition is **Good**, and current status is **Available** if there is no Current Assignee (otherwise **Assigned**).
+1. Review Open jobs.
+2. **Send to repair** or **Send to upgrade** — fill **Vendor / Technician** and **Maintenance Cost**. Status becomes **In Progress**, the asset is **In Repair**, and **Start Date** is set automatically.
+3. **Mark repair/upgrade complete** — fill **Repair Result / Action Taken**. Status becomes **Completed**, condition after maintenance is **Good**, the asset condition is **Good**, **Completion Date** is set automatically, and current status is **Available** if there is no Current Assignee (otherwise **Assigned**).
 
-Disposal jobs can be started and completed the same way, but completing disposal does not set the asset back to Available or Good.
+Disposal jobs can be started and completed the same way, without vendor, cost, or result. Completing disposal does not set the asset back to Available or Good.
 
 If the asset has no serial yet, use the button on the job row instead of scanning.
 

@@ -32,10 +32,22 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Textarea } from "@/components/ui/textarea";
 import { useHardwareScanner } from "@/hooks/use-hardware-scanner";
-import { previewMaintenanceChanges } from "@/lib/maintenance-copy";
-import type { MaintenanceAdvanceResult, MaintenanceJob, MaintenancePayload } from "@/lib/types";
+import {
+  formatMaintenanceCost,
+  isWorkshopJob,
+  maintenanceActionLabel,
+  previewMaintenanceChanges,
+} from "@/lib/maintenance-copy";
+import type {
+  MaintenanceAdvanceDetails,
+  MaintenanceAdvanceResult,
+  MaintenanceJob,
+  MaintenancePayload,
+} from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type StatusFilter = "open" | "progress" | "all";
@@ -45,14 +57,33 @@ type MaintenanceDeskProps = {
   initialError?: string | null;
 };
 
-function actionLabel(job: MaintenanceJob) {
+function parsedCost(value: string): number | null {
+  const text = value.trim();
+  if (!text) return null;
+  const parsed = Number(text.replace(/,/g, ""));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formDetails(
+  job: MaintenanceJob | null,
+  vendor: string,
+  cost: string,
+  result: string
+): MaintenanceAdvanceDetails {
+  if (!job) return {};
+  if (job.nextAction === "start") return { vendor, cost: parsedCost(cost) };
+  if (job.nextAction === "complete") return { result };
+  return {};
+}
+
+function canConfirm(job: MaintenanceJob, vendor: string, cost: string, result: string) {
+  if (!job.nextAction) return false;
+  if (!isWorkshopJob(job.type)) return true;
   if (job.nextAction === "start") {
-    return job.type === "Disposal" ? "Start disposal" : "Send to repair";
+    const costValue = parsedCost(cost);
+    return Boolean(vendor.trim()) && costValue != null && costValue >= 0;
   }
-  if (job.nextAction === "complete") {
-    return job.type === "Disposal" ? "Mark disposal complete" : "Mark repair complete";
-  }
-  return "No action";
+  return Boolean(result.trim());
 }
 
 export function MaintenanceDesk({
@@ -66,9 +97,14 @@ export function MaintenanceDesk({
   const [filter, setFilter] = useState<StatusFilter>("open");
   const [scanOpen, setScanOpen] = useState(false);
   const [pending, setPending] = useState<MaintenanceJob | null>(null);
-  const [changes, setChanges] = useState<string[]>([]);
+  const [vendor, setVendor] = useState("");
+  const [cost, setCost] = useState("");
+  const [result, setResult] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [lastResult, setLastResult] = useState<MaintenanceAdvanceResult | null>(null);
+
+  const details = formDetails(pending, vendor, cost, result);
+  const changes = pending ? previewMaintenanceChanges(pending, details) : [];
 
   async function load() {
     setLoadError(null);
@@ -101,13 +137,15 @@ export function MaintenanceDesk({
   const openCount = payload?.jobs.filter((job) => job.status === "Open").length ?? 0;
   const progressCount = payload?.jobs.filter((job) => job.status === "In Progress").length ?? 0;
 
-  function askConfirm(job: MaintenanceJob, extraChanges?: string[]) {
+  function askConfirm(job: MaintenanceJob) {
     if (!job.nextAction) {
       toast.error(`${job.maintenanceId} is ${job.status} and cannot be updated here.`);
       return;
     }
+    setVendor("");
+    setCost("");
+    setResult("");
     setPending(job);
-    setChanges(extraChanges?.length ? extraChanges : previewMaintenanceChanges(job));
   }
 
   async function lookupSerial(serial: string) {
@@ -117,11 +155,11 @@ export function MaintenanceDesk({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ serial }),
       });
-      const body = (await response.json()) as { job?: MaintenanceJob; changes?: string[]; error?: string };
+      const body = (await response.json()) as { job?: MaintenanceJob; error?: string };
       if (!response.ok || !body.job) {
         throw new Error(body.error || "No matching maintenance job.");
       }
-      askConfirm(body.job, body.changes);
+      askConfirm(body.job);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not match that serial.");
     }
@@ -134,10 +172,20 @@ export function MaintenanceDesk({
 
   async function confirmAdvance() {
     if (!pending) return;
+    if (!canConfirm(pending, vendor, cost, result)) {
+      toast.error(
+        pending.nextAction === "complete"
+          ? "Enter the repair result / action taken."
+          : "Enter the vendor and maintenance cost."
+      );
+      return;
+    }
     setSubmitting(true);
     try {
       const response = await fetch(`/api/maintenance/${encodeURIComponent(pending.recordId)}/advance`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(details),
       });
       const body = (await response.json()) as MaintenanceAdvanceResult & { error?: string };
       if (!response.ok) throw new Error(body.error || "Could not update that job.");
@@ -152,11 +200,13 @@ export function MaintenanceDesk({
     }
   }
 
+  const workshopPending = pending ? isWorkshopJob(pending.type) : false;
+
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
       <DeskHeader
         title="Maintenance desk"
-        description="Review Open jobs, scan the serial when you send the asset out, then scan again when the repair is done. Completing a repair sets condition to Good and Available if nobody is assigned."
+        description="Send Repair and Upgrade jobs out with vendor and cost, then record the result when they come back. Start and completion dates are filled automatically. Disposal is unchanged for now."
         mode={payload?.mode}
         loading={loading}
         onRefresh={() => {
@@ -278,6 +328,12 @@ export function MaintenanceDesk({
                           Asset {job.currentStatus || "—"} · {job.assetCondition || "no condition"}
                           {job.assignee ? ` · Assigned to ${job.assignee}` : " · No assignee"}
                         </p>
+                        {job.vendor ? (
+                          <p className="text-xs text-muted-foreground">
+                            Vendor {job.vendor}
+                            {job.cost != null ? ` · Cost ${formatMaintenanceCost(job.cost)}` : ""}
+                          </p>
+                        ) : null}
                       </div>
                       {job.nextAction ? (
                         <Button
@@ -287,7 +343,7 @@ export function MaintenanceDesk({
                           className="shrink-0"
                           onClick={() => askConfirm(job)}
                         >
-                          {actionLabel(job)}
+                          {maintenanceActionLabel(job)}
                         </Button>
                       ) : null}
                     </div>
@@ -309,10 +365,15 @@ export function MaintenanceDesk({
         }}
       />
 
-      <Dialog open={Boolean(pending)} onOpenChange={(open) => !open && !submitting && setPending(null)}>
+      <Dialog
+        open={Boolean(pending)}
+        onOpenChange={(open) => {
+          if (!open && !submitting) setPending(null);
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{pending ? actionLabel(pending) : "Confirm"}</DialogTitle>
+            <DialogTitle>{pending ? maintenanceActionLabel(pending) : "Confirm"}</DialogTitle>
             <DialogDescription>
               {pending
                 ? `${pending.maintenanceId} · ${pending.assetName}`
@@ -320,20 +381,77 @@ export function MaintenanceDesk({
             </DialogDescription>
           </DialogHeader>
           {pending ? (
-            <ul className="space-y-1.5 rounded-lg bg-muted/60 p-3 text-sm">
-              {changes.map((change) => (
-                <li key={change} className="flex gap-2">
-                  <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-400" />
-                  <span>{change}</span>
-                </li>
-              ))}
-            </ul>
+            <div className="space-y-4">
+              {workshopPending && pending.nextAction === "start" ? (
+                <div className="grid gap-3">
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="maintenance-vendor">Vendor / Technician</Label>
+                    <Input
+                      id="maintenance-vendor"
+                      value={vendor}
+                      onChange={(event) => setVendor(event.target.value)}
+                      placeholder="Who is doing the work?"
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="maintenance-cost">Maintenance Cost</Label>
+                    <Input
+                      id="maintenance-cost"
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      step="0.01"
+                      value={cost}
+                      onChange={(event) => setCost(event.target.value)}
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">Start Date is set automatically.</p>
+                </div>
+              ) : null}
+              {workshopPending && pending.nextAction === "complete" ? (
+                <div className="grid gap-1.5">
+                  <Label htmlFor="maintenance-result">Repair Result / Action Taken</Label>
+                  <Textarea
+                    id="maintenance-result"
+                    value={result}
+                    onChange={(event) => setResult(event.target.value)}
+                    placeholder="What was repaired or upgraded?"
+                    rows={3}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Completion Date is set automatically.
+                  </p>
+                </div>
+              ) : null}
+              {!workshopPending && pending.nextAction === "start" ? (
+                <p className="text-xs text-muted-foreground">Start Date is set automatically.</p>
+              ) : null}
+              {!workshopPending && pending.nextAction === "complete" ? (
+                <p className="text-xs text-muted-foreground">
+                  Completion Date is set automatically. Disposal details are not collected yet.
+                </p>
+              ) : null}
+              <ul className="space-y-1.5 rounded-lg bg-muted/60 p-3 text-sm">
+                {changes.map((change) => (
+                  <li key={change} className="flex gap-2">
+                    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-400" />
+                    <span>{change}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           ) : null}
           <DialogFooter>
             <Button type="button" variant="outline" disabled={submitting} onClick={() => setPending(null)}>
               Cancel
             </Button>
-            <Button type="button" disabled={submitting} onClick={() => void confirmAdvance()}>
+            <Button
+              type="button"
+              disabled={submitting || !pending || !canConfirm(pending, vendor, cost, result)}
+              onClick={() => void confirmAdvance()}
+            >
               {submitting ? <Loader2 className="size-4 animate-spin" /> : null}
               Confirm
             </Button>

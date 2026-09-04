@@ -26,6 +26,12 @@ export type UpdateSerialResult = {
 
 export type MaintenanceAction = "start" | "complete";
 
+export type MaintenanceAdvanceDetails = {
+  vendor?: string;
+  cost?: number | string | null;
+  result?: string;
+};
+
 export type MaintenanceJob = {
   recordId: string;
   maintenanceId: string;
@@ -40,6 +46,9 @@ export type MaintenanceJob = {
   currentStatus: string;
   assetCondition: string;
   assignee: string;
+  vendor: string;
+  cost: number | null;
+  result: string;
   nextAction: MaintenanceAction | null;
 };
 

@@ -19,12 +19,14 @@ import {
 } from "@/lib/mock-maintenance";
 import {
   describeMaintenanceAdvance,
+  isWorkshopJob,
   maintenanceSummary,
   previewMaintenanceChanges,
 } from "@/lib/maintenance-copy";
 import { looksLikeSerial, sanitizeSerial } from "@/lib/serial";
 import type {
   MaintenanceAction,
+  MaintenanceAdvanceDetails,
   MaintenanceAdvanceResult,
   MaintenanceJob,
   MaintenancePayload,
@@ -47,6 +49,9 @@ type MaintenanceContext = {
     startDate: string | null;
     completionDate: string | null;
     conditionAfter: string | null;
+    vendor: string | null;
+    cost: string | null;
+    result: string | null;
   };
   assetFields: {
     name: string;
@@ -137,6 +142,13 @@ async function resolveMaintenanceContext(): Promise<MaintenanceContext> {
         "condition after maintenance",
         "condition after",
       ]),
+      vendor: pickOptional(fields, ["vendor technician", "vendor", "technician"]),
+      cost: pickOptional(fields, ["maintenance cost", "cost"]),
+      result: pickOptional(fields, [
+        "repair result action taken",
+        "repair result",
+        "action taken",
+      ]),
     },
     assetFields: {
       name: pickField(assetFields, session.config.assetNameField, [
@@ -173,6 +185,44 @@ async function loadLinkedAssets(ctx: MaintenanceContext, assetIds: string[]) {
   return map;
 }
 
+function parseCostValue(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const text = String(value).replace(/,/g, "").trim();
+  if (!text) return null;
+  const parsed = Number(text);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function parseMaintenanceAdvanceDetails(body: unknown): MaintenanceAdvanceDetails {
+  if (!body || typeof body !== "object") return {};
+  const record = body as Record<string, unknown>;
+  const vendor = typeof record.vendor === "string" ? record.vendor : "";
+  const result = typeof record.result === "string" ? record.result : "";
+  return {
+    vendor,
+    cost: parseCostValue(record.cost),
+    result,
+  };
+}
+
+function requireWorkshopStart(details: MaintenanceAdvanceDetails) {
+  const vendor = details.vendor?.trim() ?? "";
+  if (!vendor) throw new Error("Enter the vendor before sending this asset out.");
+  const cost = parseCostValue(details.cost);
+  if (cost == null) throw new Error("Enter the maintenance cost.");
+  if (cost < 0) throw new Error("Maintenance cost cannot be negative.");
+  return { vendor, cost };
+}
+
+function requireWorkshopComplete(details: MaintenanceAdvanceDetails) {
+  const result = details.result?.trim() ?? "";
+  if (!result) {
+    throw new Error("Enter the repair result / action taken before marking this complete.");
+  }
+  return { result };
+}
+
 function jobFromRecords(
   ctx: MaintenanceContext,
   recordId: string,
@@ -199,6 +249,9 @@ function jobFromRecords(
       ? fieldToString(assetFields[ctx.assetFields.condition])
       : "",
     assignee: ctx.assetFields.assignee ? fieldToString(assetFields[ctx.assetFields.assignee]) : "",
+    vendor: ctx.fields.vendor ? fieldToString(maintFields[ctx.fields.vendor]) : "",
+    cost: ctx.fields.cost ? parseCostValue(maintFields[ctx.fields.cost]) : null,
+    result: ctx.fields.result ? fieldToString(maintFields[ctx.fields.result]) : "",
     nextAction: nextActionFor(status),
   };
 }
@@ -284,15 +337,22 @@ export async function lookupMaintenanceJob(rawSerial: string): Promise<Maintenan
   return job;
 }
 
-function describeAdvance(job: MaintenanceJob, action: MaintenanceAction): string[] {
-  return describeMaintenanceAdvance(job, action);
+function describeAdvance(
+  job: MaintenanceJob,
+  action: MaintenanceAction,
+  details?: MaintenanceAdvanceDetails
+): string[] {
+  return describeMaintenanceAdvance(job, action, details);
 }
 
 function summaryFor(job: MaintenanceJob, action: MaintenanceAction) {
   return maintenanceSummary(job, action);
 }
 
-async function advanceLarkJob(recordId: string): Promise<MaintenanceAdvanceResult> {
+async function advanceLarkJob(
+  recordId: string,
+  details: MaintenanceAdvanceDetails
+): Promise<MaintenanceAdvanceResult> {
   const ctx = await resolveMaintenanceContext();
   const record = await getTableRecord(ctx.token, ctx.appToken, ctx.tableId, recordId);
   if (!record) throw new Error("That maintenance record was not found.");
@@ -306,6 +366,21 @@ async function advanceLarkJob(recordId: string): Promise<MaintenanceAdvanceResul
     throw new Error(`${job.maintenanceId} is ${job.status}. Only Open and In Progress jobs can be updated here.`);
   }
 
+  const workshop = isWorkshopJob(job.type);
+  const startDetails = action === "start" && workshop ? requireWorkshopStart(details) : null;
+  const completeDetails = action === "complete" && workshop ? requireWorkshopComplete(details) : null;
+  if (startDetails) {
+    if (!ctx.fields.vendor) {
+      throw new Error("The Maintenance Log is missing a Vendor / Technician field.");
+    }
+    if (!ctx.fields.cost) {
+      throw new Error("The Maintenance Log is missing a Maintenance Cost field.");
+    }
+  }
+  if (completeDetails && !ctx.fields.result) {
+    throw new Error("The Maintenance Log is missing a Repair Result / Action Taken field.");
+  }
+
   const now = Date.now();
   const maintFields: Record<string, unknown> = {};
   const assetUpdate: Record<string, unknown> = {};
@@ -313,13 +388,20 @@ async function advanceLarkJob(recordId: string): Promise<MaintenanceAdvanceResul
   if (action === "start") {
     maintFields[ctx.fields.status] = "In Progress";
     if (ctx.fields.startDate) maintFields[ctx.fields.startDate] = now;
-    if ((job.type === "Repair" || job.type === "Upgrade") && ctx.assetFields.currentStatus) {
+    if (startDetails) {
+      if (ctx.fields.vendor) maintFields[ctx.fields.vendor] = startDetails.vendor;
+      if (ctx.fields.cost) maintFields[ctx.fields.cost] = startDetails.cost;
+    }
+    if (workshop && ctx.assetFields.currentStatus) {
       assetUpdate[ctx.assetFields.currentStatus] = "In Repair";
     }
   } else {
     maintFields[ctx.fields.status] = "Completed";
     if (ctx.fields.completionDate) maintFields[ctx.fields.completionDate] = now;
-    if (job.type === "Repair" || job.type === "Upgrade") {
+    if (completeDetails && ctx.fields.result) {
+      maintFields[ctx.fields.result] = completeDetails.result;
+    }
+    if (workshop) {
       if (ctx.fields.conditionAfter) maintFields[ctx.fields.conditionAfter] = "Good";
       if (ctx.assetFields.condition) assetUpdate[ctx.assetFields.condition] = "Good";
       if (ctx.assetFields.currentStatus) {
@@ -349,13 +431,16 @@ async function advanceLarkJob(recordId: string): Promise<MaintenanceAdvanceResul
     action,
     job: updated,
     summary: summaryFor(job, action),
-    changes: describeAdvance(job, action),
+    changes: describeAdvance(job, action, details),
   };
 }
 
-export async function advanceMaintenance(recordId: string): Promise<MaintenanceAdvanceResult> {
+export async function advanceMaintenance(
+  recordId: string,
+  details: MaintenanceAdvanceDetails = {}
+): Promise<MaintenanceAdvanceResult> {
   if (!(await isLarkConfigured())) {
-    const { action, job } = advanceMockMaintenance(recordId);
+    const { action, job } = advanceMockMaintenance(recordId, details);
     invalidateMaintenanceCache();
     invalidateAssetsCache();
     return {
@@ -363,18 +448,18 @@ export async function advanceMaintenance(recordId: string): Promise<MaintenanceA
       action,
       job,
       summary: summaryFor(job, action),
-      changes: describeAdvance(job, action),
+      changes: describeAdvance(job, action, details),
     };
   }
 
-  const result = await advanceLarkJob(recordId);
+  const result = await advanceLarkJob(recordId, details);
   invalidateMaintenanceCache();
   invalidateAssetsCache();
   return result;
 }
 
-export function previewChanges(job: MaintenanceJob): string[] {
-  return previewMaintenanceChanges(job);
+export function previewChanges(job: MaintenanceJob, details?: MaintenanceAdvanceDetails): string[] {
+  return previewMaintenanceChanges(job, details);
 }
 
 export async function createMaintenanceFromReturn(input: {
