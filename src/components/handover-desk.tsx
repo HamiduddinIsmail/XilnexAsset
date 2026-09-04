@@ -43,6 +43,8 @@ import {
   needsReturnDate,
   nextAssetStatus,
   nextTransactionType,
+  pickHandoverConditions,
+  pickHandoverReasons,
 } from "@/lib/handover-shared";
 import type {
   HandoverAsset,
@@ -167,7 +169,7 @@ export function HandoverDesk({
   const [staffId, setStaffId] = useState("");
   const [location, setLocation] = useState("");
   const [assignmentType, setAssignmentType] = useState("Permanent");
-  const [reason, setReason] = useState("Existing Staff Assignment");
+  const [reason, setReason] = useState("New Joiner");
   const [condition, setCondition] = useState("Good");
   const [handoverDate, setHandoverDate] = useState(todayISO);
   const [expectedReturnDate, setExpectedReturnDate] = useState("");
@@ -176,6 +178,8 @@ export function HandoverDesk({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [lastResult, setLastResult] = useState<HandoverResult | null>(null);
+  const reasons = pickHandoverReasons(payload?.options.reasons ?? []);
+  const conditions = pickHandoverConditions(payload?.options.conditions ?? []);
 
   const selected = payload?.assets.find((asset) => asset.recordId === selectedId) ?? null;
   const staff = payload?.people.find((person) => person.id === staffId) ?? null;
@@ -201,7 +205,7 @@ export function HandoverDesk({
     }
     setSelectedId(asset.recordId);
     setLocation(asset.location || payload?.options.locations[0] || "");
-    setCondition(asset.condition && payload?.options.conditions.includes(asset.condition) ? asset.condition : "Good");
+    setCondition(asset.condition && conditions.includes(asset.condition) ? asset.condition : "Good");
     setAcknowledged(false);
     setLastResult(null);
   }
@@ -554,13 +558,13 @@ export function HandoverDesk({
                 />
                 <ChoiceRow
                   label="Reason"
-                  options={payload?.options.reasons ?? []}
+                  options={reasons}
                   value={reason}
                   onChange={setReason}
                 />
                 <ChoiceRow
                   label="Condition on handover"
-                  options={payload?.options.conditions ?? []}
+                  options={conditions}
                   value={condition}
                   onChange={setCondition}
                 />
