@@ -1,6 +1,8 @@
 import { invalidateAssetsCache } from "@/lib/assets";
 import { fieldToString, linkRecordIds, normalizeKey } from "@/lib/field-value";
+import { linkField, userField } from "@/lib/handover-shared";
 import {
+  createTableRecord,
   getLarkSession,
   getTableRecord,
   getTableRecords,
@@ -10,7 +12,11 @@ import {
   searchTableRecords,
   updateTableRecord,
 } from "@/lib/lark";
-import { advanceMockMaintenance, listMockMaintenanceJobs } from "@/lib/mock-maintenance";
+import {
+  advanceMockMaintenance,
+  createMockMaintenanceJob,
+  listMockMaintenanceJobs,
+} from "@/lib/mock-maintenance";
 import {
   describeMaintenanceAdvance,
   maintenanceSummary,
@@ -37,6 +43,7 @@ type MaintenanceContext = {
     priority: string;
     issue: string;
     id: string;
+    reportedBy: string | null;
     startDate: string | null;
     completionDate: string | null;
     conditionAfter: string | null;
@@ -122,6 +129,7 @@ async function resolveMaintenanceContext(): Promise<MaintenanceContext> {
       priority: pickOptional(fields, ["priority"]) || "",
       issue: pickOptional(fields, ["issue/ request", "issue request", "issue", "request"]) || "",
       id: pickOptional(fields, ["maintenance id", "id"]) || "",
+      reportedBy: pickOptional(fields, ["reported by"]),
       startDate: pickOptional(fields, ["start date"]),
       completionDate: pickOptional(fields, ["completion date", "completed date"]),
       conditionAfter: pickOptional(fields, [
@@ -305,13 +313,13 @@ async function advanceLarkJob(recordId: string): Promise<MaintenanceAdvanceResul
   if (action === "start") {
     maintFields[ctx.fields.status] = "In Progress";
     if (ctx.fields.startDate) maintFields[ctx.fields.startDate] = now;
-    if (job.type === "Repair" && ctx.assetFields.currentStatus) {
+    if ((job.type === "Repair" || job.type === "Upgrade") && ctx.assetFields.currentStatus) {
       assetUpdate[ctx.assetFields.currentStatus] = "In Repair";
     }
   } else {
     maintFields[ctx.fields.status] = "Completed";
     if (ctx.fields.completionDate) maintFields[ctx.fields.completionDate] = now;
-    if (job.type === "Repair") {
+    if (job.type === "Repair" || job.type === "Upgrade") {
       if (ctx.fields.conditionAfter) maintFields[ctx.fields.conditionAfter] = "Good";
       if (ctx.assetFields.condition) assetUpdate[ctx.assetFields.condition] = "Good";
       if (ctx.assetFields.currentStatus) {
@@ -367,4 +375,44 @@ export async function advanceMaintenance(recordId: string): Promise<MaintenanceA
 
 export function previewChanges(job: MaintenanceJob): string[] {
   return previewMaintenanceChanges(job);
+}
+
+export async function createMaintenanceFromReturn(input: {
+  assetRecordId: string;
+  assetName: string;
+  type: "Repair" | "Upgrade";
+  issue: string;
+  priority: string;
+  reportedById?: string;
+}): Promise<{ maintenanceId: string; recordId: string }> {
+  if (!(await isLarkConfigured())) {
+    return createMockMaintenanceJob({
+      assetRecordId: input.assetRecordId,
+      assetName: input.assetName,
+      type: input.type,
+      issue: input.issue,
+      priority: input.priority,
+      assigneeName: "",
+    });
+  }
+
+  const ctx = await resolveMaintenanceContext();
+  const fields: Record<string, unknown> = {
+    [ctx.fields.asset]: linkField(input.assetRecordId),
+    [ctx.fields.type]: input.type,
+    [ctx.fields.status]: "Open",
+  };
+  if (ctx.fields.issue) fields[ctx.fields.issue] = input.issue;
+  if (ctx.fields.priority) fields[ctx.fields.priority] = input.priority;
+  if (ctx.fields.reportedBy && input.reportedById) {
+    fields[ctx.fields.reportedBy] = userField(input.reportedById);
+  }
+
+  const created = await createTableRecord(ctx.token, ctx.appToken, ctx.tableId, fields);
+  const recordId = created?.record_id || created?.id || "";
+  const maintenanceId = ctx.fields.id
+    ? fieldToString(created?.fields?.[ctx.fields.id])
+    : recordId || "saved";
+  invalidateMaintenanceCache();
+  return { maintenanceId: maintenanceId || recordId || "saved", recordId };
 }

@@ -44,8 +44,12 @@ import {
   defaultReturnReason,
   describeReturnChanges,
   holderKeyForAsset,
+  keepsAssignee,
   listReturnHolders,
+  maintenanceTypeForReturn,
+  needsMaintenanceJob,
   nextStatusAfterReturn,
+  returnItemHint,
   type ReturnHolder,
 } from "@/lib/return-shared";
 import type { HandoverAsset, ReturnPayload, ReturnResult } from "@/lib/types";
@@ -293,6 +297,9 @@ export function ReturnDesk({
       condition: item.condition,
       reason: item.reason,
       transactionId: "new",
+      assigneeKept: keepsAssignee(item.reason),
+      maintenanceCreated: needsMaintenanceJob(item.reason, item.condition),
+      maintenanceType: maintenanceTypeForReturn(item.reason),
     })
   );
 
@@ -331,7 +338,14 @@ export function ReturnDesk({
       toast.success(body.summary, {
         description:
           body.mode === "lark"
-            ? `${body.transactionIds.join(", ")} written to Transaction Log.`
+            ? [
+                body.transactionIds.join(", ") && `${body.transactionIds.join(", ")} written to Transaction Log.`,
+                body.maintenanceIds?.length
+                  ? `${body.maintenanceIds.join(", ")} opened on Maintenance Log.`
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" ")
             : "Saved in demo mode. Connect Lark Base to write the live tables.",
       });
       await load();
@@ -346,7 +360,7 @@ export function ReturnDesk({
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
       <DeskHeader
         title="Asset return"
-        description="Filter by who holds the assets, or scan a serial. Add one item or a whole staff list, then confirm once."
+        description="Filter by who holds the assets, or scan a serial. Resignation and Project End clear the assignee. Repair and Upgrade keep them and open a maintenance job."
         mode={payload?.mode}
         loading={loading}
         onRefresh={() => {
@@ -378,6 +392,9 @@ export function ReturnDesk({
           <AlertTitle>{lastResult.summary}</AlertTitle>
           <AlertDescription>
             {lastResult.transactionIds.join(" · ") || "Saved"}
+            {lastResult.maintenanceIds?.length
+              ? ` · Maintenance ${lastResult.maintenanceIds.join(", ")}`
+              : ""}
             {lastResult.assets[0] ? ` · ${lastResult.assets[0].name} is ${lastResult.assets[0].currentStatus}` : ""}.
           </AlertDescription>
         </Alert>
@@ -579,7 +596,7 @@ export function ReturnDesk({
             </CardTitle>
             <CardDescription>
               {basket.length
-                ? "Set reason and condition per asset, then confirm the batch."
+                ? "Resignation and Project End clear the holder. Repair and Upgrade keep them."
                 : "Pick a staff member, scan, or tap assets on the left."}
             </CardDescription>
           </CardHeader>
@@ -638,6 +655,11 @@ export function ReturnDesk({
                             )
                           }
                         />
+                        {item.reason || item.condition === "Damaged" ? (
+                          <p className="text-xs text-muted-foreground">
+                            {returnItemHint(item.reason, item.condition)}
+                          </p>
+                        ) : null}
                       </div>
                     </li>
                   ))}
@@ -694,7 +716,7 @@ export function ReturnDesk({
                       <span className="block font-medium">Return acknowledgement</span>
                       <span className="mt-1 block text-muted-foreground">
                         The employee is returning the assigned company asset(s) in the condition
-                        stated here. Damaged, faulty, or missing items may be inspected or repaired
+                        stated here. Damaged or missing items may be inspected or repaired
                         under company policy.
                       </span>
                     </span>

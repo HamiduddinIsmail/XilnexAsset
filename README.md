@@ -119,18 +119,25 @@ There is no Lark approval chain. The person at the desk is the handover.
 
 ## Asset return
 
-Open **Return** in the header. Scan first; you can queue several assets and confirm once.
+Open **Return** in the header. Filter by the person who holds the assets, or scan a serial. You can queue several assets and confirm once.
 
-1. Scan or tap **Assigned** or **Loan** stock. The holder is taken from **Current Assignee** — there is no employee picker.
-2. Set return reason and condition on each item. Shared date and location apply to the whole batch.
-3. Tick acknowledgement, review, and submit.
+Return reason is one of four:
+
+1. **Resignation** — clear Current Assignee and put the asset back to **Available**.
+2. **Return for Repair** — keep Current Assignee. Status becomes **In Repair**. Opens a **Repair** job on **3. Maintenance Log**.
+3. **Return for Upgrade** — keep Current Assignee. Status becomes **In Repair** until the upgrade is done. Opens an **Upgrade** job on Maintenance Log.
+4. **Project End** — use this after a **Project Requirement** handover. Clear Current Assignee and put the asset back to **Available**.
+
+Condition on return is **Good**, **Fair**, **Damaged**, or **Missing** (no Faulty).
+
+If the reason is Repair or Upgrade, or the condition is **Damaged**, the desk also creates an Open maintenance job (Damaged uses Repair unless the reason is Upgrade). Damaged plus Resignation or Project End still clears the assignee and sets status to **In Repair**.
 
 The app then, for each asset:
 
-- Clears **Current Assignee**
-- Sets **Current Status** to **Available**, or **In Repair** if the reason is Return for Repair, or **Missing** if the condition is Missing
-- Sets **Location** and **Asset Condition** (except Missing, which only changes status)
-- Adds a **Return** row on **2. Transaction Log** with **Assignment Status = Returned** and **Approval Status = Approved**
+- Writes a **Return** row on **2. Transaction Log** (**Assignment Status = Returned**, **Approval Status = Approved**)
+- Updates **Current Status**, **Location**, and **Asset Condition** on **1. Asset Register**
+- Clears **Current Assignee** unless the reason is Repair or Upgrade
+- Opens **3. Maintenance Log** when repair, upgrade, or damaged applies
 
 ## Maintenance desk
 

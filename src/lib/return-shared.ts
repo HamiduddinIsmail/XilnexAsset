@@ -2,15 +2,17 @@ import { normalizeKey } from "@/lib/field-value";
 import { dateToMillis } from "@/lib/handover-shared";
 import type { HandoverAsset, ReturnSubmitInput } from "@/lib/types";
 
-export const DEMO_RETURN_REASONS = [
-  "Asset Return",
+export const RETURN_REASON_CHOICES = [
+  "Resignation",
   "Return for Repair",
-  "Staff Transfer",
-  "Replacement",
-  "Other",
+  "Return for Upgrade",
+  "Project End",
 ];
 
-export const DEMO_RETURN_CONDITIONS = ["Good", "Fair", "Damaged", "Faulty", "Missing"];
+export const RETURN_CONDITION_CHOICES = ["Good", "Fair", "Damaged", "Missing"];
+
+export const DEMO_RETURN_REASONS = RETURN_REASON_CHOICES;
+export const DEMO_RETURN_CONDITIONS = RETURN_CONDITION_CHOICES;
 
 export function blockedReturnReason(status: string, assigneeId: string): string | null {
   const key = normalizeKey(status);
@@ -35,17 +37,79 @@ export function toReturnAsset(asset: HandoverAsset): HandoverAsset {
 }
 
 export function pickReturnReasons(all: string[]) {
-  const hit = DEMO_RETURN_REASONS.filter((reason) => all.includes(reason));
-  return hit.length ? hit : all.length ? all : DEMO_RETURN_REASONS;
+  const byKey = new Map(all.map((item) => [normalizeKey(item), item]));
+  const hit = RETURN_REASON_CHOICES.map((label) => byKey.get(normalizeKey(label))).filter(
+    (item): item is string => Boolean(item)
+  );
+  return hit.length ? hit : RETURN_REASON_CHOICES;
 }
 
 export function pickReturnConditions(all: string[]) {
-  return all.length ? all : DEMO_RETURN_CONDITIONS;
+  const byKey = new Map(all.map((item) => [normalizeKey(item), item]));
+  const hit = RETURN_CONDITION_CHOICES.map((label) => byKey.get(normalizeKey(label))).filter(
+    (item): item is string => Boolean(item)
+  );
+  return hit.length ? hit : RETURN_CONDITION_CHOICES;
+}
+
+export function keepsAssignee(reason: string) {
+  const key = normalizeKey(reason);
+  return key === "return for repair" || key === "return for upgrade";
+}
+
+export function needsMaintenanceJob(reason: string, condition: string) {
+  const reasonKey = normalizeKey(reason);
+  const conditionKey = normalizeKey(condition);
+  return (
+    reasonKey === "return for repair" ||
+    reasonKey === "return for upgrade" ||
+    conditionKey === "damaged"
+  );
+}
+
+export function maintenanceTypeForReturn(reason: string): "Repair" | "Upgrade" {
+  return normalizeKey(reason) === "return for upgrade" ? "Upgrade" : "Repair";
+}
+
+export function returnReasonHint(reason: string) {
+  const key = normalizeKey(reason);
+  if (key === "resignation") return "Clears Current Assignee.";
+  if (key === "return for repair") {
+    return "Keeps the assignee. Opens a Repair job. Status becomes In Repair.";
+  }
+  if (key === "return for upgrade") {
+    return "Keeps the assignee. Opens an Upgrade job. Status becomes In Repair until the work is done.";
+  }
+  if (key === "project end") return "Clears Current Assignee. Use this after a Project Requirement handover.";
+  return "";
+}
+
+export function returnItemHint(reason: string, condition: string) {
+  const parts = [returnReasonHint(reason)].filter(Boolean);
+  if (
+    normalizeKey(condition) === "damaged" &&
+    normalizeKey(reason) !== "return for repair" &&
+    normalizeKey(reason) !== "return for upgrade"
+  ) {
+    parts.push("Damaged also opens a Repair job.");
+  }
+  return parts.join(" ");
+}
+
+export function maintenanceIssueForReturn(reason: string, condition: string, remarks: string) {
+  const parts: string[] = [];
+  const reasonKey = normalizeKey(reason);
+  if (reasonKey === "return for repair") parts.push("Returned for repair.");
+  else if (reasonKey === "return for upgrade") parts.push("Returned for upgrade.");
+  else parts.push(`Returned · ${reason}.`);
+  if (condition) parts.push(`Condition on return: ${condition}.`);
+  if (remarks.trim()) parts.push(remarks.trim());
+  return parts.join(" ");
 }
 
 export function nextStatusAfterReturn(reason: string, condition: string) {
   if (normalizeKey(condition) === "missing") return "Missing";
-  if (normalizeKey(reason) === "return for repair") return "In Repair";
+  if (keepsAssignee(reason) || normalizeKey(condition) === "damaged") return "In Repair";
   return "Available";
 }
 
@@ -81,18 +145,30 @@ export function describeReturnChanges(input: {
   condition: string;
   reason: string;
   transactionId: string;
+  assigneeKept?: boolean;
+  maintenanceCreated?: boolean;
+  maintenanceType?: string;
 }) {
-  return [
-    input.previousAssignee
-      ? `${input.assetName} returned by ${input.previousAssignee}`
-      : `${input.assetName} returned`,
+  const changes = [
+    input.assigneeKept && input.previousAssignee
+      ? `${input.assetName} stays with ${input.previousAssignee}`
+      : input.previousAssignee
+        ? `${input.assetName} returned by ${input.previousAssignee}`
+        : `${input.assetName} returned`,
     `Current status → ${input.nextStatus}`,
+    input.assigneeKept
+      ? `Current Assignee kept · ${input.previousAssignee}`
+      : "Current Assignee cleared",
     `Location → ${input.location}`,
     `Condition on return → ${input.condition}`,
     `Reason · ${input.reason}`,
     `Transaction Log ${input.transactionId || "(new)"} · Return, Returned`,
-    "Received by Admin team",
   ];
+  if (input.maintenanceCreated) {
+    changes.push(`Maintenance Log · ${input.maintenanceType || "Repair"} job opened`);
+  }
+  changes.push("Received by Admin team");
+  return changes;
 }
 
 export function defaultReturnCondition(asset: HandoverAsset, options: string[]) {
@@ -101,9 +177,8 @@ export function defaultReturnCondition(asset: HandoverAsset, options: string[]) 
   return options[0] ?? "Good";
 }
 
-export function defaultReturnReason(options: string[]) {
-  if (options.includes("Asset Return")) return "Asset Return";
-  return options[0] ?? "Asset Return";
+export function defaultReturnReason(_options: string[]) {
+  return "";
 }
 
 export type ReturnHolder = {

@@ -16,7 +16,7 @@ const TOOLS = [
   {
     href: "/return",
     title: "Asset Return",
-    description: "Filter by staff, see what they hold, and take those assets back into stock.",
+    description: "Filter by staff. Resignation and Project End clear the holder; repair and upgrade keep them and open a job.",
     icon: Undo2,
   },
   {

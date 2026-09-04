@@ -260,21 +260,30 @@ async function listTables(token: string, appToken: string) {
   return body.data?.items ?? [];
 }
 
+export type LarkSelectOption = {
+  id: string;
+  name: string;
+  color?: number;
+};
+
 export type LarkFieldMeta = {
   name: string;
+  fieldId: string;
   type: number;
   uiType: string;
   options: string[];
+  selectOptions: LarkSelectOption[];
 };
 
 async function listFieldMeta(token: string, appToken: string, tableId: string): Promise<LarkFieldMeta[]> {
   const body = await larkFetch<{
     data?: {
       items?: Array<{
+        field_id?: string;
         field_name?: string;
         type?: number;
         ui_type?: string;
-        property?: { options?: Array<{ name?: string }> };
+        property?: { options?: Array<{ id?: string; name?: string; color?: number }> };
       }>;
     };
   }>(`/open-apis/bitable/v1/apps/${appToken}/tables/${tableId}/fields?page_size=100`, {
@@ -282,14 +291,23 @@ async function listFieldMeta(token: string, appToken: string, tableId: string): 
     token,
   });
   return (body.data?.items ?? [])
-    .map((item) => ({
-      name: item.field_name?.trim() ?? "",
-      type: item.type ?? 0,
-      uiType: item.ui_type ?? "",
-      options: (item.property?.options ?? [])
-        .map((option) => option.name?.trim() ?? "")
-        .filter(Boolean),
-    }))
+    .map((item) => {
+      const selectOptions = (item.property?.options ?? [])
+        .map((option) => ({
+          id: option.id?.trim() ?? "",
+          name: option.name?.trim() ?? "",
+          color: option.color,
+        }))
+        .filter((option) => option.name);
+      return {
+        name: item.field_name?.trim() ?? "",
+        fieldId: item.field_id?.trim() ?? "",
+        type: item.type ?? 0,
+        uiType: item.ui_type ?? "",
+        options: selectOptions.map((option) => option.name),
+        selectOptions,
+      };
+    })
     .filter((item) => item.name);
 }
 
@@ -990,6 +1008,44 @@ export async function listTableFieldNames(token: string, appToken: string, table
 
 export async function listTableFieldMeta(token: string, appToken: string, tableId: string) {
   return listFieldMeta(token, appToken, tableId);
+}
+
+export async function ensureSelectOptions(
+  token: string,
+  appToken: string,
+  tableId: string,
+  fieldName: string,
+  extraNames: string[]
+) {
+  const wanted = extraNames.map((name) => name.trim()).filter(Boolean);
+  if (!wanted.length) return;
+  const meta = await listFieldMeta(token, appToken, tableId);
+  const field = meta.find((item) => normalizeKey(item.name) === normalizeKey(fieldName));
+  if (!field?.fieldId) return;
+  if (field.type !== 3 && field.type !== 4) return;
+
+  const existingKeys = new Set(field.selectOptions.map((option) => normalizeKey(option.name)));
+  const missing = wanted.filter((name) => !existingKeys.has(normalizeKey(name)));
+  if (!missing.length) return;
+
+  const options = [
+    ...field.selectOptions.map((option) => ({
+      id: option.id || undefined,
+      name: option.name,
+      ...(typeof option.color === "number" ? { color: option.color } : {}),
+    })),
+    ...missing.map((name) => ({ name })),
+  ];
+
+  await larkFetch(`/open-apis/bitable/v1/apps/${appToken}/tables/${tableId}/fields/${field.fieldId}`, {
+    method: "PUT",
+    token,
+    body: JSON.stringify({
+      field_name: field.name,
+      type: field.type,
+      property: { options },
+    }),
+  });
 }
 
 const ATTACHMENT_FIELD_TYPE = 17;

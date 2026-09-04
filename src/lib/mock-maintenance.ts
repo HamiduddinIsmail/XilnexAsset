@@ -72,6 +72,35 @@ function withNext(job: MaintenanceJob): MaintenanceJob {
   return { ...job, nextAction };
 }
 
+export function createMockMaintenanceJob(input: {
+  assetRecordId: string;
+  assetName: string;
+  type: "Repair" | "Upgrade";
+  issue: string;
+  priority: string;
+  assigneeName: string;
+}) {
+  const id = `MNT-${String(store().jobs.length + 20).padStart(5, "0")}`;
+  const job: MaintenanceJob = {
+    recordId: `mnt-demo-${id}`,
+    maintenanceId: id,
+    type: input.type,
+    status: "Open",
+    priority: input.priority,
+    issue: input.issue,
+    assetRecordId: input.assetRecordId,
+    assetId: "",
+    assetName: input.assetName,
+    serialNumber: "",
+    currentStatus: "In Repair",
+    assetCondition: "Damaged",
+    assignee: input.assigneeName,
+    nextAction: "start",
+  };
+  store().jobs.unshift(job);
+  return { maintenanceId: id, recordId: job.recordId };
+}
+
 export function listMockMaintenanceJobs(): MaintenanceJob[] {
   return store().jobs.map((job) => withNext({ ...job }));
 }
@@ -87,13 +116,13 @@ export function advanceMockMaintenance(recordId: string) {
 
   if (action === "start") {
     job.status = "In Progress";
-    if (job.type === "Repair") job.currentStatus = "In Repair";
+    if (job.type === "Repair" || job.type === "Upgrade") job.currentStatus = "In Repair";
   } else {
     job.status = "Completed";
-    if (job.type === "Repair") {
-      job.assetCondition = "Good";
-      job.currentStatus = job.assignee ? "Assigned" : "Available";
-    }
+    if (job.type === "Repair" || job.type === "Upgrade") {
+    job.assetCondition = "Good";
+    job.currentStatus = job.assignee ? "Assigned" : "Available";
+  }
   }
 
   return { action, job: withNext({ ...job }) };

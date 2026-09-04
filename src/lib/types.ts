@@ -173,5 +173,6 @@ export type ReturnResult = {
   summary: string;
   changes: string[];
   transactionIds: string[];
+  maintenanceIds: string[];
   assets: HandoverAsset[];
 };
