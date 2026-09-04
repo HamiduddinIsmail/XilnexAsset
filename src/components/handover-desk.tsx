@@ -172,7 +172,7 @@ export function HandoverDesk({
 }: HandoverDeskProps) {
   const [payload, setPayload] = useState<HandoverPayload | null>(initialPayload);
   const [loadError, setLoadError] = useState<string | null>(initialError);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(!initialPayload && !initialError);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<StatusFilter>("ready");
   const [scanOpen, setScanOpen] = useState(false);
@@ -288,6 +288,12 @@ export function HandoverDesk({
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (initialPayload || initialError) return;
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function addAsset(asset: HandoverAsset) {
     if (asset.blockedReason) {

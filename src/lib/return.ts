@@ -86,7 +86,7 @@ type ReturnContext = {
     assignmentStatus: string | null;
     conditionOnReturn: string | null;
     remarks: string | null;
-    signature: string;
+    signature: string | null;
     createdTime: string | null;
   };
 };
@@ -166,24 +166,10 @@ async function resolveReturnContext(): Promise<ReturnContext> {
       assignmentStatus: pickOptional(txnNames, ["assignment status"]),
       conditionOnReturn: pickOptional(txnNames, ["condition on return"]),
       remarks: pickOptional(txnNames, ["remarks", "remark"]),
-      signature: (
-        await ensureAttachmentField(session.token, session.appToken, txnTable.table_id, {
-          name: "Signature",
-          aliases: ["employee signature", "acknowledgement signature"],
-        })
-      ).name,
+      signature: pickOptional(txnNames, ["signature", "employee signature", "acknowledgement signature"]),
       createdTime: pickOptional(txnNames, ["created time"]),
     },
   };
-  if (value.txnFields.reason) {
-    await ensureSelectOptions(
-      session.token,
-      session.appToken,
-      txnTable.table_id,
-      value.txnFields.reason,
-      RETURN_REASON_CHOICES
-    );
-  }
   contextCache = { at: Date.now(), value };
   return { ...value, token: session.token };
 }
@@ -243,7 +229,7 @@ async function listRecentReturns(ctx: ReturnContext, assetNames: Map<string, str
 }
 
 async function listLarkReturnDesk(): Promise<ReturnPayload> {
-  const desk = await getHandoverDesk();
+  const desk = await getHandoverDesk({ includePeople: false });
   const ctx = await resolveReturnContext();
   const txnMeta = await listTableFieldMeta(ctx.token, ctx.appToken, ctx.txnTableId);
   const assets = desk.assets.map(toReturnAsset);
@@ -312,6 +298,23 @@ async function submitLarkReturn(
 ): Promise<ReturnResult> {
   validateReturnInput(input);
   const ctx = await resolveReturnContext();
+  if (ctx.txnFields.reason) {
+    await ensureSelectOptions(
+      ctx.token,
+      ctx.appToken,
+      ctx.txnTableId,
+      ctx.txnFields.reason,
+      RETURN_REASON_CHOICES
+    );
+  }
+  if (!ctx.txnFields.signature) {
+    ctx.txnFields.signature = (
+      await ensureAttachmentField(ctx.token, ctx.appToken, ctx.txnTableId, {
+        name: "Signature",
+        aliases: ["employee signature", "acknowledgement signature"],
+      })
+    ).name;
+  }
   const when = dateToMillis(input.returnDate);
   const png = pngBytesFromDataUrl(signatureDataUrl);
   const fileToken = await uploadBitableFile({

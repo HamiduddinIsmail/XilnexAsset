@@ -80,9 +80,9 @@ type TxnFields = {
   approvedBy: string | null;
   approvalDate: string | null;
   condition: string | null;
-  remarks: string | null;
-  signature: string;
-  createdTime: string | null;
+    remarks: string | null;
+    signature: string | null;
+    createdTime: string | null;
 };
 
 type HandoverContext = {
@@ -97,7 +97,7 @@ type HandoverContext = {
 };
 
 let contextCache: { at: number; value: HandoverContext } | null = null;
-let deskCache: { at: number; data: HandoverPayload } | null = null;
+let deskCache: { at: number; data: HandoverPayload; withPeople: boolean } | null = null;
 const TTL_MS = 15_000;
 
 export function invalidateHandoverCache() {
@@ -179,12 +179,7 @@ async function resolveHandoverContext(): Promise<HandoverContext> {
     approvalDate: pickOptional(txnNames, ["approval date"]),
     condition: pickOptional(txnNames, ["condition on handover", "condition"]),
     remarks: pickOptional(txnNames, ["remarks", "remark"]),
-    signature: (
-      await ensureAttachmentField(session.token, session.appToken, txnTable.table_id, {
-        name: "Signature",
-        aliases: ["employee signature", "acknowledgement signature"],
-      })
-    ).name,
+    signature: pickOptional(txnNames, ["signature", "employee signature", "acknowledgement signature"]),
     createdTime: pickOptional(txnNames, ["created time"]),
   };
 
@@ -274,22 +269,24 @@ async function listPeople(ctx: HandoverContext, assets: HandoverAsset[]): Promis
       avatarUrl: "",
     }));
 
-  try {
-    const txnRecords = await searchTableRecords(ctx.token, ctx.appToken, ctx.txnTableId, {
-      fieldNames: [ctx.txnFields.staff, ctx.txnFields.requestedBy, ctx.txnFields.approvedBy].filter(
-        (name): name is string => Boolean(name)
-      ),
-      maxRecords: 500,
-      pageSize: 200,
-    });
-    for (const record of txnRecords) {
-      const fields = record.fields ?? {};
-      harvested.push(...parseUsers(fields[ctx.txnFields.staff]));
-      if (ctx.txnFields.requestedBy) harvested.push(...parseUsers(fields[ctx.txnFields.requestedBy]));
-      if (ctx.txnFields.approvedBy) harvested.push(...parseUsers(fields[ctx.txnFields.approvedBy]));
+  if (directory.length === 0) {
+    try {
+      const txnRecords = await searchTableRecords(ctx.token, ctx.appToken, ctx.txnTableId, {
+        fieldNames: [ctx.txnFields.staff, ctx.txnFields.requestedBy, ctx.txnFields.approvedBy].filter(
+          (name): name is string => Boolean(name)
+        ),
+        maxRecords: 200,
+        pageSize: 200,
+      });
+      for (const record of txnRecords) {
+        const fields = record.fields ?? {};
+        harvested.push(...parseUsers(fields[ctx.txnFields.staff]));
+        if (ctx.txnFields.requestedBy) harvested.push(...parseUsers(fields[ctx.txnFields.requestedBy]));
+        if (ctx.txnFields.approvedBy) harvested.push(...parseUsers(fields[ctx.txnFields.approvedBy]));
+      }
+    } catch {
+      // Directory harvest is optional; contact list is enough to hand over.
     }
-  } catch {
-    // Directory harvest is optional; contact list is enough to hand over.
   }
 
   const people = mergePeople([directory, harvested]);
@@ -343,7 +340,7 @@ async function listRecent(ctx: HandoverContext, assetNames: Map<string, string>)
     .filter((item) => item.recordId);
 }
 
-async function listLarkDesk(): Promise<HandoverPayload> {
+async function listLarkDesk(includePeople: boolean): Promise<HandoverPayload> {
   const ctx = await resolveHandoverContext();
   const fieldNames = [
     ctx.assetFields.name,
@@ -367,10 +364,13 @@ async function listLarkDesk(): Promise<HandoverPayload> {
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const assetNames = new Map(assets.map((asset) => [asset.recordId, asset.name]));
-  const [{ people, peopleLimited, peopleHint }, recent] = await Promise.all([
-    listPeople(ctx, assets),
+  const [peopleResult, recent] = await Promise.all([
+    includePeople
+      ? listPeople(ctx, assets)
+      : Promise.resolve({ people: [] as HandoverPerson[], peopleLimited: false, peopleHint: undefined }),
     listRecent(ctx, assetNames),
   ]);
+  const { people, peopleLimited, peopleHint } = peopleResult;
 
   return {
     mode: "lark",
@@ -385,8 +385,11 @@ async function listLarkDesk(): Promise<HandoverPayload> {
   };
 }
 
-export async function getHandoverDesk(): Promise<HandoverPayload> {
-  if (deskCache && Date.now() - deskCache.at < TTL_MS) return deskCache.data;
+export async function getHandoverDesk(options?: { includePeople?: boolean }): Promise<HandoverPayload> {
+  const includePeople = options?.includePeople !== false;
+  if (deskCache && Date.now() - deskCache.at < TTL_MS && (!includePeople || deskCache.withPeople)) {
+    return deskCache.data;
+  }
 
   if (!(await isLarkConfigured())) {
     const data: HandoverPayload = {
@@ -401,12 +404,12 @@ export async function getHandoverDesk(): Promise<HandoverPayload> {
       warning:
         "Demo mode is on because no Lark Base is connected yet. Handovers stay on this server until you connect Setup.",
     };
-    deskCache = { at: Date.now(), data };
+    deskCache = { at: Date.now(), data, withPeople: true };
     return data;
   }
 
-  const data = await listLarkDesk();
-  deskCache = { at: Date.now(), data };
+  const data = await listLarkDesk(includePeople);
+  deskCache = { at: Date.now(), data, withPeople: includePeople };
   return data;
 }
 
@@ -445,6 +448,14 @@ async function submitLarkHandover(
     bytes: png,
   });
   const signatureCell = attachmentFieldValue(fileToken);
+  const signatureField =
+    ctx.txnFields.signature ||
+    (
+      await ensureAttachmentField(ctx.token, ctx.appToken, ctx.txnTableId, {
+        name: "Signature",
+        aliases: ["employee signature", "acknowledgement signature"],
+      })
+    ).name;
 
   const when = dateToMillis(input.handoverDate);
   const returnAt = input.expectedReturnDate ? dateToMillis(input.expectedReturnDate) : null;
@@ -470,7 +481,7 @@ async function submitLarkHandover(
       [ctx.txnFields.staff]: userField(staff.id),
       [ctx.txnFields.assignmentType]: input.assignmentType,
       [ctx.txnFields.location]: input.location,
-      [ctx.txnFields.signature]: signatureCell,
+      [signatureField]: signatureCell,
     };
     if (ctx.txnFields.reason) txnFields[ctx.txnFields.reason] = input.reason;
     if (ctx.txnFields.requestDate) txnFields[ctx.txnFields.requestDate] = when;

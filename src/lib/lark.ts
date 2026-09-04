@@ -916,22 +916,22 @@ export async function listCompanyPeople(token: string): Promise<{
   people: LarkPerson[];
   limited: boolean;
 }> {
-  const groups: LarkPerson[][] = [];
-  let walkedOrg = false;
-
   try {
-    groups.push(await listDirectoryEmployees(token));
-    walkedOrg = true;
+    const people = await listDirectoryEmployees(token);
+    if (people.length > 0) return { people, limited: false };
   } catch {
     // Needs directory:employee:list — fall through to Contacts.
   }
 
   try {
-    groups.push(await listUsersInDepartment(token, "0"));
-    walkedOrg = true;
+    const people = await listUsersInDepartment(token, "0");
+    if (people.length > 0) return { people, limited: false };
   } catch {
     // Root department requires all-employee contacts permission.
   }
+
+  const groups: LarkPerson[][] = [];
+  let walkedOrg = false;
 
   try {
     const childIds = await listDepartmentChildren(token, "0");
@@ -947,30 +947,26 @@ export async function listCompanyPeople(token: string): Promise<{
     // Root department children require all-employee contacts permission.
   }
 
-  const scopes = await listContactScopeIds(token);
-  for (const departmentId of scopes.departmentIds) {
-    try {
-      groups.push(await listUsersInDepartment(token, departmentId));
-      const nested = await listDepartmentChildren(token, departmentId).catch(() => []);
-      for (const childId of nested) {
-        try {
-          groups.push(await listUsersInDepartment(token, childId));
-        } catch {
-          // Skip nested departments the app cannot read.
-        }
+  try {
+    const scopes = await listContactScopeIds(token);
+    walkedOrg = true;
+    for (const departmentId of scopes.departmentIds) {
+      try {
+        groups.push(await listUsersInDepartment(token, departmentId));
+      } catch {
+        // Skip departments outside the app's contacts range.
       }
-    } catch {
-      // Skip departments outside the app's contacts range.
     }
-  }
-
-  for (const userId of scopes.userIds) {
-    try {
-      const person = await getContactUser(token, userId);
-      if (person) groups.push([person]);
-    } catch {
-      // Scope ids can include users the token cannot hydrate.
+    for (const userId of scopes.userIds) {
+      try {
+        const person = await getContactUser(token, userId);
+        if (person) groups.push([person]);
+      } catch {
+        // Scope ids can include users the token cannot hydrate.
+      }
     }
+  } catch {
+    // Contacts scope is optional.
   }
 
   try {

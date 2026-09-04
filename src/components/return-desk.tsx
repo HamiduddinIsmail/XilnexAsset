@@ -166,7 +166,7 @@ export function ReturnDesk({
 }: ReturnDeskProps) {
   const [payload, setPayload] = useState<ReturnPayload | null>(initialPayload);
   const [loadError, setLoadError] = useState<string | null>(initialError);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(!initialPayload && !initialError);
   const [query, setQuery] = useState("");
   const [holderQuery, setHolderQuery] = useState("");
   const [holderKey, setHolderKey] = useState("");
@@ -278,6 +278,12 @@ export function ReturnDesk({
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (initialPayload || initialError) return;
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function addAsset(asset: HandoverAsset) {
     queueAssets([asset], { single: true });
