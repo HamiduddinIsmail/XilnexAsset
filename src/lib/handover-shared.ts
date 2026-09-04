@@ -104,8 +104,14 @@ export function pickHandoverAssignmentTypes(all: string[]) {
   return pickListed(all, HANDOVER_ASSIGNMENT_TYPE_CHOICES);
 }
 
+export function handoverAssetLabel(assetId: string, name: string) {
+  const id = assetId.trim();
+  return id ? `${id} · ${name}` : name;
+}
+
 export function describeHandoverChanges(input: {
   assetName: string;
+  assetId?: string;
   staffName: string;
   previousAssignee: string;
   nextStatus: string;
@@ -114,10 +120,11 @@ export function describeHandoverChanges(input: {
   transactionType: string;
   transactionId: string;
 }) {
+  const asset = handoverAssetLabel(input.assetId ?? "", input.assetName);
   const changes = [
     input.previousAssignee
-      ? `${input.assetName} moves from ${input.previousAssignee} to ${input.staffName}`
-      : `${input.assetName} → ${input.staffName}`,
+      ? `${asset} moves from ${input.previousAssignee} to ${input.staffName}`
+      : `${asset} → ${input.staffName}`,
     `Current status → ${input.nextStatus}`,
     `Location → ${input.location}`,
     `Condition on handover → ${input.condition}`,

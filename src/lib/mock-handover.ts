@@ -158,6 +158,7 @@ export function submitMockHandover(input: HandoverSubmitInput): HandoverResult {
     summary: `Handed ${raw.name} to ${staff.name}.`,
     changes: describeHandoverChanges({
       assetName: raw.name,
+      assetId: raw.extra["Asset Tag"] ?? "",
       staffName: staff.name,
       previousAssignee: currentHolder?.name ?? "",
       nextStatus,

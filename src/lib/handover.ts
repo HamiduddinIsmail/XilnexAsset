@@ -469,6 +469,7 @@ async function submitLarkHandover(input: HandoverSubmitInput): Promise<HandoverR
     summary: `Handed ${asset.name} to ${staff.name}.`,
     changes: describeHandoverChanges({
       assetName: asset.name,
+      assetId: asset.assetId,
       staffName: staff.name,
       previousAssignee: asset.assigneeName,
       nextStatus,

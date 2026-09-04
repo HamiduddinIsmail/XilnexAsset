@@ -42,6 +42,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useHardwareScanner } from "@/hooks/use-hardware-scanner";
 import {
   describeHandoverChanges,
+  handoverAssetLabel,
   needsReturnDate,
   nextAssetStatus,
   nextTransactionType,
@@ -341,6 +342,7 @@ export function HandoverDesk({
   const preview = selected && staff
     ? describeHandoverChanges({
         assetName: selected.name,
+        assetId: selected.assetId,
         staffName: staff.name,
         previousAssignee: selected.assigneeName,
         nextStatus: nextAssetStatus(assignmentType),
@@ -830,7 +832,7 @@ export function HandoverDesk({
             <DialogTitle>Confirm handover</DialogTitle>
             <DialogDescription>
               {selected && staff
-                ? `${selected.name} → ${staff.name}`
+                ? `${handoverAssetLabel(selected.assetId, selected.name)} → ${staff.name}`
                 : "Review what will be written to Lark."}
             </DialogDescription>
           </DialogHeader>
