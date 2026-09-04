@@ -2,17 +2,20 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ClipboardList, Lock, Settings, Tag } from "lucide-react";
+import { ClipboardList, Handshake, LayoutGrid, Lock, Settings, Tag, Undo2 } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
-  { href: "/", label: "Serials", icon: Tag },
+  { href: "/", label: "Tools", icon: LayoutGrid },
+  { href: "/handover", label: "Handover", icon: Handshake },
+  { href: "/return", label: "Return", icon: Undo2 },
   { href: "/maintenance", label: "Maintenance", icon: ClipboardList },
+  { href: "/serials", label: "Serials", icon: Tag },
 ];
 
-export function AppNav() {
+export function SessionActions() {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -23,7 +26,39 @@ export function AppNav() {
   }
 
   return (
-    <nav className="flex flex-wrap items-center gap-2">
+    <div className="flex shrink-0 items-center gap-2">
+      <Link
+        href="/setup"
+        aria-label="Setup"
+        className={buttonVariants({
+          variant: pathname === "/setup" ? "default" : "outline",
+          size: "sm",
+        })}
+      >
+        <Settings className="size-3.5" />
+        <span className="hidden sm:inline">Setup</span>
+      </Link>
+      <button
+        type="button"
+        aria-label="Lock"
+        onClick={() => void lock()}
+        className={buttonVariants({ variant: "outline", size: "sm" })}
+      >
+        <Lock className="size-3.5" />
+        <span className="hidden sm:inline">Lock</span>
+      </button>
+    </div>
+  );
+}
+
+export function AppNav() {
+  const pathname = usePathname();
+
+  return (
+    <nav
+      aria-label="Asset desk tools"
+      className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
       {LINKS.map((link) => {
         const active = pathname === link.href;
         const Icon = link.icon;
@@ -33,6 +68,7 @@ export function AppNav() {
             href={link.href}
             className={cn(
               buttonVariants({ variant: active ? "default" : "outline", size: "sm" }),
+              "shrink-0",
               active && "bg-[var(--brand)] text-white"
             )}
           >
@@ -41,24 +77,6 @@ export function AppNav() {
           </Link>
         );
       })}
-      <Link
-        href="/setup"
-        className={buttonVariants({
-          variant: pathname === "/setup" ? "default" : "outline",
-          size: "sm",
-        })}
-      >
-        <Settings className="size-3.5" />
-        Setup
-      </Link>
-      <button
-        type="button"
-        onClick={() => void lock()}
-        className={buttonVariants({ variant: "outline", size: "sm" })}
-      >
-        <Lock className="size-3.5" />
-        Lock
-      </button>
     </nav>
   );
 }

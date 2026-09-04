@@ -6,14 +6,12 @@ import {
   CheckCircle2,
   ClipboardList,
   Loader2,
-  RefreshCw,
-  ScanLine,
   Search,
   Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { AppNav } from "@/components/app-nav";
+import { DeskHeader } from "@/components/desk-header";
 import { ScanDialog } from "@/components/scan-dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -156,61 +154,17 @@ export function MaintenanceDesk({
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-1.5">
-          <div className="flex items-start gap-3">
-            <img
-              src="/xilnex-logo.jpg"
-              alt="Xilnex Holdings"
-              width={48}
-              height={48}
-              className="size-12 rounded-xl bg-white shadow-sm ring-1 ring-foreground/10"
-            />
-            <div className="space-y-1">
-              <p className="text-sm font-medium tracking-wide text-white/90">Xilnex Holdings</p>
-              <h1 className="font-heading text-2xl font-semibold tracking-tight sm:text-3xl">
-                Maintenance desk
-              </h1>
-            </div>
-          </div>
-          <p className="max-w-2xl text-sm text-muted-foreground sm:mt-1 sm:text-[0.95rem]">
-            Review Open jobs, scan the serial when you send the asset out, then scan again when
-            the repair is done. Completing a repair sets condition to Good and Available if nobody
-            is assigned.
-          </p>
-        </div>
-        <div className="flex flex-col items-stretch gap-2 sm:items-end">
-          <div className="flex flex-wrap items-center gap-2">
-            {payload ? (
-              <Badge
-                className={
-                  payload.mode === "lark" ? "border-transparent bg-[var(--brand)] text-white" : undefined
-                }
-                variant={payload.mode === "lark" ? "default" : "secondary"}
-              >
-                {payload.mode === "lark" ? "Lark Base connected" : "Demo mode"}
-              </Badge>
-            ) : null}
-            <AppNav />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setLoading(true);
-                void load();
-              }}
-              disabled={loading}
-            >
-              {loading ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
-              Refresh
-            </Button>
-          </div>
-          <Button size="lg" onClick={() => setScanOpen(true)}>
-            <ScanLine className="size-4" />
-            Scan serial
-          </Button>
-        </div>
-      </header>
+      <DeskHeader
+        title="Maintenance desk"
+        description="Review Open jobs, scan the serial when you send the asset out, then scan again when the repair is done. Completing a repair sets condition to Good and Available if nobody is assigned."
+        mode={payload?.mode}
+        loading={loading}
+        onRefresh={() => {
+          setLoading(true);
+          void load();
+        }}
+        onScan={() => setScanOpen(true)}
+      />
 
       {payload?.warning ? (
         <Alert>
