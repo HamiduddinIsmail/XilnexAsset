@@ -86,6 +86,16 @@ LARK_API_BASE=https://open.feishu.cn
 
 Anyone who can open `/setup` can change the connection. Run this app on a trusted network.
 
+## Live data speed
+
+Opening a desk talks to Lark (Asset Register plus, on Handover, the company directory). The first load after idle is the slow one. After that:
+
+- The staff list is reused for 10 minutes (Refresh on Handover fetches it again).
+- The Handover/Return asset list is reused for about 45 seconds. Completing a handover or return clears that snapshot so the next open shows the new assignee.
+- Handover loads the register, recent transactions, and staff at the same time instead of one after another.
+
+Tap **Refresh** on a desk when you need the live Base right now (new employee, asset just added in Lark).
+
 ## PIN lock
 
 The first visit opens a welcome screen. Create a **4-digit PIN**. After that, the link alone cannot read or change Lark data.

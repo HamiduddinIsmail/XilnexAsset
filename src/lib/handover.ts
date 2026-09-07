@@ -35,6 +35,14 @@ import {
   uploadBitableFile,
 } from "@/lib/lark";
 import {
+  HANDOVER_DESK_CACHE_KEY,
+  HANDOVER_DESK_TTL_MS,
+  PEOPLE_CACHE_KEY,
+  clearTtlJson,
+  readTtlJson,
+  writeTtlJson,
+} from "@/lib/lark-cache";
+import {
   DEMO_HANDOVER_OPTIONS,
   listMockHandoverAssets,
   listMockPeople,
@@ -98,11 +106,13 @@ type HandoverContext = {
 
 let contextCache: { at: number; value: HandoverContext } | null = null;
 let deskCache: { at: number; data: HandoverPayload; withPeople: boolean } | null = null;
-const TTL_MS = 15_000;
+let deskInflight: Promise<HandoverPayload> | null = null;
+const TTL_MS = HANDOVER_DESK_TTL_MS;
 
-export function invalidateHandoverCache() {
+export async function invalidateHandoverCache() {
   deskCache = null;
-  contextCache = null;
+  deskInflight = null;
+  await clearTtlJson(HANDOVER_DESK_CACHE_KEY);
 }
 
 function pickOptional(fields: string[], candidates: string[]) {
@@ -145,8 +155,10 @@ async function resolveHandoverContext(): Promise<HandoverContext> {
     );
   }
 
-  const assetMeta = await listTableFieldMeta(session.token, session.appToken, assetTable.table_id);
-  const txnMeta = await listTableFieldMeta(session.token, session.appToken, txnTable.table_id);
+  const [assetMeta, txnMeta] = await Promise.all([
+    listTableFieldMeta(session.token, session.appToken, assetTable.table_id),
+    listTableFieldMeta(session.token, session.appToken, txnTable.table_id),
+  ]);
   const assetNames = assetMeta.map((field) => field.name);
   const txnNames = txnMeta.map((field) => field.name);
 
@@ -244,7 +256,11 @@ function mergePeople(groups: HandoverPerson[][]) {
   return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-async function listPeople(ctx: HandoverContext, assets: HandoverAsset[]): Promise<{
+async function listPeople(
+  ctx: HandoverContext,
+  assets: HandoverAsset[],
+  fresh: boolean
+): Promise<{
   people: HandoverPerson[];
   peopleLimited: boolean;
   peopleHint?: string;
@@ -252,7 +268,7 @@ async function listPeople(ctx: HandoverContext, assets: HandoverAsset[]): Promis
   let directory: HandoverPerson[] = [];
   let limited = false;
   try {
-    const listed = await listCompanyPeople(ctx.token);
+    const listed = await listCompanyPeople(ctx.token, { fresh });
     directory = listed.people;
     limited = listed.limited;
   } catch {
@@ -269,24 +285,6 @@ async function listPeople(ctx: HandoverContext, assets: HandoverAsset[]): Promis
       avatarUrl: "",
     }));
 
-  try {
-    const txnRecords = await searchTableRecords(ctx.token, ctx.appToken, ctx.txnTableId, {
-      fieldNames: [ctx.txnFields.staff, ctx.txnFields.requestedBy, ctx.txnFields.approvedBy].filter(
-        (name): name is string => Boolean(name)
-      ),
-      maxRecords: 100,
-      pageSize: 100,
-    });
-    for (const record of txnRecords) {
-      const fields = record.fields ?? {};
-      harvested.push(...parseUsers(fields[ctx.txnFields.staff]));
-      if (ctx.txnFields.requestedBy) harvested.push(...parseUsers(fields[ctx.txnFields.requestedBy]));
-      if (ctx.txnFields.approvedBy) harvested.push(...parseUsers(fields[ctx.txnFields.approvedBy]));
-    }
-  } catch {
-    // Directory harvest is optional; contact list is enough to hand over.
-  }
-
   const people = mergePeople([directory, harvested]);
   return {
     people,
@@ -297,7 +295,7 @@ async function listPeople(ctx: HandoverContext, assets: HandoverAsset[]): Promis
   };
 }
 
-async function listRecent(ctx: HandoverContext, assetNames: Map<string, string>): Promise<HandoverTransaction[]> {
+async function listRecent(ctx: HandoverContext): Promise<Array<HandoverTransaction & { linkedAssetId: string }>> {
   const records = await searchTableRecords(ctx.token, ctx.appToken, ctx.txnTableId, {
     filter: {
       conjunction: "or",
@@ -323,7 +321,7 @@ async function listRecent(ctx: HandoverContext, assetNames: Map<string, string>)
         recordId: record.record_id || record.id || "",
         transactionId: ctx.txnFields.id ? fieldToString(fields[ctx.txnFields.id]) : "",
         type: fieldToString(fields[ctx.txnFields.type]),
-        assetName: (linked && assetNames.get(linked)) || fieldToString(fields[ctx.txnFields.asset]) || "Asset",
+        assetName: fieldToString(fields[ctx.txnFields.asset]) || "Asset",
         staffName: staff?.name ?? "",
         location: fieldToString(fields[ctx.txnFields.location]),
         assignmentType: fieldToString(fields[ctx.txnFields.assignmentType]),
@@ -333,12 +331,13 @@ async function listRecent(ctx: HandoverContext, assetNames: Map<string, string>)
         effectiveDate: ctx.txnFields.effectiveDate
           ? millisToDate(fields[ctx.txnFields.effectiveDate])
           : "",
+        linkedAssetId: linked,
       };
     })
     .filter((item) => item.recordId);
 }
 
-async function listLarkDesk(includePeople: boolean): Promise<HandoverPayload> {
+async function listLarkDesk(includePeople: boolean, fresh: boolean): Promise<HandoverPayload> {
   const ctx = await resolveHandoverContext();
   const fieldNames = [
     ctx.assetFields.name,
@@ -351,7 +350,18 @@ async function listLarkDesk(includePeople: boolean): Promise<HandoverPayload> {
     ctx.assetFields.email,
   ].filter((name): name is string => Boolean(name));
 
-  const records = await searchTableRecords(ctx.token, ctx.appToken, ctx.assetTableId, { fieldNames });
+  const [records, peopleResult, recent] = await Promise.all([
+    searchTableRecords(ctx.token, ctx.appToken, ctx.assetTableId, { fieldNames }),
+    includePeople
+      ? listPeople(ctx, [], fresh)
+      : Promise.resolve({
+          people: [] as HandoverPerson[],
+          peopleLimited: false,
+          peopleHint: undefined as string | undefined,
+        }),
+    listRecent(ctx),
+  ]);
+
   const assets = records
     .map((record) => {
       const recordId = record.record_id || record.id || "";
@@ -361,14 +371,16 @@ async function listLarkDesk(includePeople: boolean): Promise<HandoverPayload> {
     .filter((asset): asset is HandoverAsset => Boolean(asset))
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  const harvested = assets
+    .filter((asset) => asset.assigneeId)
+    .map((asset) => ({
+      id: asset.assigneeId,
+      name: asset.assigneeName,
+      email: asset.assigneeEmail,
+      avatarUrl: "",
+    }));
+  const people = includePeople ? mergePeople([peopleResult.people, harvested]) : [];
   const assetNames = new Map(assets.map((asset) => [asset.recordId, asset.name]));
-  const [peopleResult, recent] = await Promise.all([
-    includePeople
-      ? listPeople(ctx, assets)
-      : Promise.resolve({ people: [] as HandoverPerson[], peopleLimited: false, peopleHint: undefined }),
-    listRecent(ctx, assetNames),
-  ]);
-  const { people, peopleLimited, peopleHint } = peopleResult;
 
   return {
     mode: "lark",
@@ -376,19 +388,61 @@ async function listLarkDesk(includePeople: boolean): Promise<HandoverPayload> {
     transactionTableName: ctx.txnTableName,
     assets,
     people,
-    recent,
+    recent: recent.map(({ linkedAssetId, ...item }) => ({
+      ...item,
+      assetName: (linkedAssetId && assetNames.get(linkedAssetId)) || item.assetName,
+    })),
     options: ctx.options,
-    peopleLimited,
-    peopleHint,
+    peopleLimited: peopleResult.peopleLimited,
+    peopleHint: peopleResult.peopleHint,
   };
 }
 
-export async function getHandoverDesk(options?: { includePeople?: boolean }): Promise<HandoverPayload> {
+export async function getHandoverDesk(options?: {
+  includePeople?: boolean;
+  fresh?: boolean;
+}): Promise<HandoverPayload> {
   const includePeople = options?.includePeople !== false;
-  if (deskCache && Date.now() - deskCache.at < TTL_MS && (!includePeople || deskCache.withPeople)) {
+  const fresh = options?.fresh === true;
+
+  if (fresh) {
+    deskCache = null;
+    deskInflight = null;
+    await Promise.all([clearTtlJson(HANDOVER_DESK_CACHE_KEY), clearTtlJson(PEOPLE_CACHE_KEY)]);
+  }
+
+  if (!fresh && deskCache && Date.now() - deskCache.at < TTL_MS && (!includePeople || deskCache.withPeople)) {
+    if (!includePeople && deskCache.withPeople) {
+      return { ...deskCache.data, people: [], peopleLimited: false, peopleHint: undefined };
+    }
     return deskCache.data;
   }
 
+  if (!fresh && includePeople && deskInflight) {
+    return deskInflight;
+  }
+
+  if (!fresh) {
+    const persisted = await readTtlJson<HandoverPayload>(HANDOVER_DESK_CACHE_KEY, HANDOVER_DESK_TTL_MS);
+    if (persisted?.assets && Array.isArray(persisted.assets)) {
+      deskCache = { at: Date.now(), data: persisted, withPeople: true };
+      if (!includePeople) {
+        return { ...persisted, people: [], peopleLimited: false, peopleHint: undefined };
+      }
+      return persisted;
+    }
+  }
+
+  const pending = loadHandoverDesk(includePeople, fresh);
+  if (includePeople) {
+    deskInflight = pending.finally(() => {
+      deskInflight = null;
+    });
+  }
+  return pending;
+}
+
+async function loadHandoverDesk(includePeople: boolean, fresh: boolean): Promise<HandoverPayload> {
   if (!(await isLarkConfigured())) {
     const data: HandoverPayload = {
       mode: "demo",
@@ -406,8 +460,11 @@ export async function getHandoverDesk(options?: { includePeople?: boolean }): Pr
     return data;
   }
 
-  const data = await listLarkDesk(includePeople);
+  const data = await listLarkDesk(includePeople, fresh);
   deskCache = { at: Date.now(), data, withPeople: includePeople };
+  if (includePeople) {
+    await writeTtlJson(HANDOVER_DESK_CACHE_KEY, data);
+  }
   return data;
 }
 
@@ -553,7 +610,7 @@ export async function submitHandover(input: HandoverSubmitInput): Promise<Handov
 
   if (!(await isLarkConfigured())) {
     const result = submitMockHandover(nextInput);
-    invalidateHandoverCache();
+    await invalidateHandoverCache();
     invalidateAssetsCache();
     return result;
   }
@@ -564,7 +621,7 @@ export async function submitHandover(input: HandoverSubmitInput): Promise<Handov
     signed.staffName,
     signed.signedAt ?? new Date().toISOString()
   );
-  invalidateHandoverCache();
+  await invalidateHandoverCache();
   invalidateAssetsCache();
   return result;
 }

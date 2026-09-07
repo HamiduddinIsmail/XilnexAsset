@@ -1,5 +1,6 @@
 import { invalidateAssetsCache } from "@/lib/assets";
 import { requireApiSession } from "@/lib/guard";
+import { clearLarkLiveCaches } from "@/lib/lark-cache";
 import { publicConnectionInfo, resetLarkRuntime, verifyLarkSettings } from "@/lib/lark";
 import {
   maskAppId,
@@ -70,6 +71,7 @@ export async function PUT(request: Request) {
     });
     resetLarkRuntime();
     invalidateAssetsCache();
+    await clearLarkLiveCaches();
 
     return Response.json({
       configured: true,

@@ -52,6 +52,10 @@ export async function writeJsonFile<T>(key: string, value: T) {
   });
 }
 
+export async function invalidateJsonKey(key: string) {
+  await writeJsonFile(key, { at: 0, value: null });
+}
+
 async function readLocalJson<T>(key: string): Promise<T | null> {
   try {
     const raw = await readFile(path.join(DATA_DIR, `${key}.json`), "utf8");

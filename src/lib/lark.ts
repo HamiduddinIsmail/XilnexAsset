@@ -1,4 +1,10 @@
 import { fieldToString, normalizeKey } from "@/lib/field-value";
+import {
+  PEOPLE_CACHE_KEY,
+  PEOPLE_TTL_MS,
+  readTtlJson,
+  writeTtlJson,
+} from "@/lib/lark-cache";
 import { maskAppId, readStoredSettings } from "@/lib/settings";
 import type { AssetMeta } from "@/lib/types";
 
@@ -68,12 +74,23 @@ type RuntimeConfig = {
 
 let tokenCache: TokenCache | null = null;
 let contextCache: { at: number; value: Awaited<ReturnType<typeof buildLarkContext>> } | null = null;
+let tablesCache: {
+  at: number;
+  appToken: string;
+  tables: Array<{ table_id?: string; name?: string }>;
+} | null = null;
+let peopleInflight: Promise<{
+  people: Array<{ id: string; name: string; email: string; avatarUrl: string }>;
+  limited: boolean;
+}> | null = null;
 let runtimeConfig: RuntimeConfig | null | undefined;
 const CONTEXT_TTL_MS = 5 * 60_000;
 
 export function resetLarkRuntime() {
   tokenCache = null;
   contextCache = null;
+  tablesCache = null;
+  peopleInflight = null;
   runtimeConfig = undefined;
 }
 
@@ -610,8 +627,12 @@ export async function getLarkSession() {
   const config = await loadRuntimeConfig();
   if (!config) return null;
   const token = await getTenantToken();
+  if (tablesCache && Date.now() - tablesCache.at < CONTEXT_TTL_MS) {
+    return { config, token, appToken: tablesCache.appToken, tables: tablesCache.tables };
+  }
   const appToken = await resolveAppToken(token, config.appToken);
   const tables = await listTables(token, appToken);
+  tablesCache = { at: Date.now(), appToken, tables };
   return { config, token, appToken, tables };
 }
 
@@ -912,28 +933,16 @@ function mergeLarkPeople(groups: LarkPerson[][]) {
   return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export async function listCompanyPeople(token: string): Promise<{
+async function loadCompanyPeople(token: string): Promise<{
   people: LarkPerson[];
   limited: boolean;
 }> {
+  const scopes = await listContactScopeIds(token);
   const groups: LarkPerson[][] = [];
-  let scopedDepartments = 0;
+  const scopedDepartments = scopes.departmentIds.length;
+  const hasScopes = scopedDepartments > 0 || scopes.userIds.length > 0;
 
-  try {
-    groups.push(await listDirectoryEmployees(token));
-  } catch {
-    // Needs directory:employee:list — Contacts scopes below still work.
-  }
-
-  try {
-    groups.push(await listUsersInDepartment(token, "0"));
-  } catch {
-    // Root department requires all-employee contacts permission.
-  }
-
-  try {
-    const scopes = await listContactScopeIds(token);
-    scopedDepartments = scopes.departmentIds.length;
+  if (hasScopes) {
     const fromDepts = await Promise.all(
       scopes.departmentIds.map((departmentId) =>
         listUsersInDepartment(token, departmentId).catch(() => [])
@@ -946,12 +955,52 @@ export async function listCompanyPeople(token: string): Promise<{
     for (const person of fromUsers) {
       if (person) groups.push([person]);
     }
-  } catch {
-    // Contacts scope is optional.
+  } else {
+    try {
+      groups.push(await listDirectoryEmployees(token));
+    } catch {
+      // Needs directory:employee:list — Contacts scopes still work when granted.
+    }
+    try {
+      groups.push(await listUsersInDepartment(token, "0"));
+    } catch {
+      // Root department requires all-employee contacts permission.
+    }
   }
 
   const people = mergeLarkPeople(groups);
-  return { people, limited: people.length === 0 || (scopedDepartments === 0 && people.length < 5) };
+  return {
+    people,
+    limited: people.length === 0 || (scopedDepartments === 0 && people.length < 5),
+  };
+}
+
+export async function listCompanyPeople(
+  token: string,
+  options?: { fresh?: boolean }
+): Promise<{
+  people: LarkPerson[];
+  limited: boolean;
+}> {
+  const fresh = options?.fresh === true;
+  if (!fresh) {
+    const cached = await readTtlJson<LarkPerson[]>(PEOPLE_CACHE_KEY, PEOPLE_TTL_MS);
+    if (cached && cached.length > 0) {
+      return { people: cached, limited: false };
+    }
+    if (peopleInflight) return peopleInflight;
+  }
+
+  const pending = loadCompanyPeople(token).then(async (result) => {
+    if (result.people.length > 0) {
+      await writeTtlJson(PEOPLE_CACHE_KEY, result.people);
+    }
+    return result;
+  });
+  peopleInflight = pending.finally(() => {
+    peopleInflight = null;
+  });
+  return pending;
 }
 
 export async function listContactUsers(token: string) {

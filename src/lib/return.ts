@@ -454,7 +454,7 @@ export async function submitReturn(input: ReturnSubmitInput): Promise<ReturnResu
   if (!(await isLarkConfigured())) {
     const result = submitMockReturn(nextInput);
     invalidateReturnCache();
-    invalidateHandoverCache();
+    await invalidateHandoverCache();
     invalidateAssetsCache();
     invalidateMaintenanceCache();
     return result;
@@ -467,7 +467,7 @@ export async function submitReturn(input: ReturnSubmitInput): Promise<ReturnResu
     signed.signedAt ?? new Date().toISOString()
   );
   invalidateReturnCache();
-  invalidateHandoverCache();
+  await invalidateHandoverCache();
   invalidateAssetsCache();
   invalidateMaintenanceCache();
   return result;
