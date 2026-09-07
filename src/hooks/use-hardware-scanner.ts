@@ -46,7 +46,8 @@ export function useHardwareScanner({ enabled, onScan }: Options) {
         burst = burst && gap <= 50;
       }
 
-      if (event.key === "Enter") {
+      const key = event.key ?? "";
+      if (key === "Enter") {
         const value = sanitizeSerial(buffer);
         if (burst && looksLikeSerial(value)) {
           event.preventDefault();
@@ -57,10 +58,10 @@ export function useHardwareScanner({ enabled, onScan }: Options) {
         return;
       }
 
-      if (event.key.length !== 1) return;
+      if (key.length !== 1) return;
 
       if (!typingInField || gap <= 50) {
-        buffer += event.key;
+        buffer += key;
         if (!typingInField && burst) {
           event.preventDefault();
         }
