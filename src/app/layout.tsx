@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Xilnex · Asset desk",
+  title: "Xilnex · Asset Desk",
   description:
     "Scan serials, hand assets to staff, take them back, and move Maintenance Log jobs in Lark Base.",
   icons: {

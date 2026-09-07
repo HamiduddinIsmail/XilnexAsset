@@ -73,7 +73,7 @@ export function HandoverSignForm({ token }: { token: string }) {
         <div>
           <p className="text-sm font-medium tracking-wide text-white/90">Xilnex Holdings</p>
           <h1 className="font-heading text-2xl font-semibold tracking-tight">
-            {session?.kind === "return" ? "Sign to return" : loading ? "Sign" : "Sign to receive"}
+            {session?.kind === "return" ? "Sign to Return" : loading ? "Sign" : "Sign to Receive"}
           </h1>
         </div>
       </div>
@@ -89,7 +89,7 @@ export function HandoverSignForm({ token }: { token: string }) {
         <div className="space-y-3 rounded-2xl border bg-card p-4">
           <p className="flex items-center gap-2 font-medium text-emerald-300">
             <CheckCircle2 className="size-4" />
-            Signature saved
+            Signature Saved
           </p>
           <p className="text-sm text-muted-foreground">
             {session.staffName} acknowledged{" "}
@@ -150,7 +150,7 @@ export function HandoverSignForm({ token }: { token: string }) {
             </Button>
             <Button type="button" className="flex-1" disabled={saving || empty} onClick={() => void save()}>
               {saving ? <Loader2 className="size-4 animate-spin" /> : null}
-              Save signature
+              Save Signature
             </Button>
           </div>
         </div>

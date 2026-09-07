@@ -117,12 +117,12 @@ export function SetupForm() {
         className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "w-fit text-white")}
       >
         <ArrowLeft className="size-4" />
-        Back to scanner
+        Back to Scanner
       </Link>
 
       <Card>
         <CardHeader>
-          <CardTitle>Admin setup</CardTitle>
+          <CardTitle>Admin Setup</CardTitle>
           <CardDescription>
             Paste the Lark custom app credentials and the Base link that contains the Asset
             Register. The app tests the connection, then every scanner using this server uses
@@ -174,7 +174,7 @@ export function SetupForm() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="baseUrl">Lark Base link</Label>
+            <Label htmlFor="baseUrl">Lark Base Link</Label>
             <Input
               id="baseUrl"
               value={baseUrl}
@@ -198,7 +198,7 @@ export function SetupForm() {
             onClick={() => void onSave()}
           >
             {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-            Test and save
+            Test and Save
           </Button>
         </CardFooter>
       </Card>
@@ -236,7 +236,7 @@ export function SetupForm() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="confirmPin">Confirm</Label>
+            <Label htmlFor="confirmPin">Confirm PIN</Label>
             <Input
               id="confirmPin"
               inputMode="numeric"

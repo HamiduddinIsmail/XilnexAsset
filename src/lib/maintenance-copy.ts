@@ -17,14 +17,14 @@ export function workshopNoun(type: string) {
 
 export function maintenanceActionLabel(job: MaintenanceJob) {
   if (job.nextAction === "start") {
-    if (typeKey(job.type) === "disposal") return "Start disposal";
-    return typeKey(job.type) === "upgrade" ? "Send to upgrade" : "Send to repair";
+    if (typeKey(job.type) === "disposal") return "Start Disposal";
+    return typeKey(job.type) === "upgrade" ? "Send to Upgrade" : "Send to Repair";
   }
   if (job.nextAction === "complete") {
-    if (typeKey(job.type) === "disposal") return "Mark disposal complete";
-    return typeKey(job.type) === "upgrade" ? "Mark upgrade complete" : "Mark repair complete";
+    if (typeKey(job.type) === "disposal") return "Mark Disposal Complete";
+    return typeKey(job.type) === "upgrade" ? "Mark Upgrade Complete" : "Mark Repair Complete";
   }
-  return "No action";
+  return "No Action";
 }
 
 export function formatMaintenanceCost(cost: number) {

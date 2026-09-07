@@ -1,8 +1,8 @@
-# Asset serial updater
+# Asset Serial Updater
 
 A small web app for Xilnex staff to work Asset Register data in Lark Base without typing serials by hand.
 
-After the PIN, you land on the **asset desk** and pick a tool:
+After the PIN, you land on the **Asset Desk** and pick a tool:
 
 1. **Asset Handover** — hand several assets (laptop, mouse, bag, …) to one person in a single confirm.
 2. **Asset Return** — take assigned or loaned assets back into stock.
@@ -36,7 +36,7 @@ You do **not** have to paste secrets into Netlify environment variables unless y
 
 If you forget the PIN on Netlify, unlock is impossible until you delete the `app-lock` blob in **Site configuration → Blobs** (store `xilnex-asset-app`) and create a new PIN.
 
-## Connect Lark Base (admin)
+## Connect Lark Base (Admin)
 
 Admins connect a Base from the app. No `.env` edit is required after that.
 
@@ -52,7 +52,7 @@ Leave App ID and Secret blank if you only want to point at a different Base with
 
 Saved credentials live in `data/lark-settings.json` (not committed). That file overrides `.env.local`.
 
-### Custom app checklist
+### Custom App Checklist
 
 Create a custom app in the [Lark Developer Console](https://open.larksuite.com/app) (or [Feishu](https://open.feishu.cn/app) if you use Feishu in China).
 
@@ -74,7 +74,7 @@ Create a custom app in the [Lark Developer Console](https://open.larksuite.com/a
 
 The table is detected by the `table=` query, or by a name that looks like **Asset Register**. Field names are auto-detected (`Asset Name`, `Serial Number`, `SN`, `序列号`, …).
 
-### Optional env fallback
+### Optional Env Fallback
 
 You can still put credentials in `.env.local` (see `.env.example`). They are used only when no Setup save exists. Restart `npm run dev` after changing env vars.
 
@@ -86,7 +86,7 @@ LARK_API_BASE=https://open.feishu.cn
 
 Anyone who can open `/setup` can change the connection. Run this app on a trusted network.
 
-## Live data speed
+## Live Data Speed
 
 Opening a desk talks to Lark (Asset Register plus, on Handover, the company directory). The first load after idle is the slow one. After that:
 
@@ -96,7 +96,7 @@ Opening a desk talks to Lark (Asset Register plus, on Handover, the company dire
 
 Tap **Refresh** on a desk when you need the live Base right now (new employee, asset just added in Lark).
 
-## PIN lock
+## PIN Lock
 
 The first visit opens a welcome screen. Create a **4-digit PIN**. After that, the link alone cannot read or change Lark data.
 
@@ -105,7 +105,7 @@ The first visit opens a welcome screen. Create a **4-digit PIN**. After that, th
 - Change the PIN later in **Setup**.
 - If the PIN is forgotten locally, delete `data/app-lock.json` and create a new one. On Netlify, delete the `app-lock` blob instead.
 
-## Asset handover
+## Asset Handover
 
 Open **Handover** in the header. This is the desk version of the old Lark Approval form — scan first, not a long dropdown of every asset.
 
@@ -127,7 +127,7 @@ The signing QR session is only kept locally (`data/handover-signs.json`, or the 
 
 There is no Lark approval chain. The person at the desk is the handover.
 
-## Asset return
+## Asset Return
 
 Open **Return** in the header. Filter by the person who holds the assets, or scan a serial. You can queue several assets and confirm once.
 
@@ -152,13 +152,13 @@ The app then, for each asset:
 - Clears **Current Assignee** unless the reason is Repair or Upgrade
 - Opens **3. Maintenance Log** when repair, upgrade, or damaged applies
 
-## Maintenance desk
+## Maintenance Desk
 
 Open **Maintenance** in the header. It lists **3. Maintenance Log** jobs that are **Open** or **In Progress**. Repair and Upgrade follow the same steps. Disposal can still be started and completed, but extra disposal fields are not collected yet.
 
 1. Review Open jobs.
-2. **Send to repair** or **Send to upgrade** — fill **Vendor / Technician** and **Maintenance Cost**. Status becomes **In Progress**, the asset is **In Repair**, and **Start Date** is set automatically.
-3. **Mark repair/upgrade complete** — fill **Repair Result / Action Taken** and choose **Asset Condition After Maintenance**. Status becomes **Completed**, that condition is written on the Maintenance Log and the asset, **Completion Date** is set automatically, and current status is **Available** if there is no Current Assignee (otherwise **Assigned**).
+2. **Send to Repair** or **Send to Upgrade** — fill **Vendor / Technician** and **Maintenance Cost**. Status becomes **In Progress**, the asset is **In Repair**, and **Start Date** is set automatically.
+3. **Mark Repair Complete** / **Mark Upgrade Complete** — fill **Repair Result / Action Taken** and choose **Asset Condition After Maintenance**. Status becomes **Completed**, that condition is written on the Maintenance Log and the asset, **Completion Date** is set automatically, and current status is **Available** if there is no Current Assignee (otherwise **Assigned**).
 
 Disposal jobs can be started and completed the same way, without vendor, cost, or result. Completing disposal does not set the asset back to Available or Good.
 
@@ -166,7 +166,7 @@ If the asset has no serial yet, use the button on the job row instead of scannin
 
 ## Scanning
 
-- **Phone camera:** tap **Scan barcode or photo**. The viewfinder is large, and the app reads the full camera feed (not just a tiny crop). On phones that support it, use **Torch** and **Zoom**, or tap **Read this frame** to decode a still at full resolution.
+- **Phone camera:** tap **Scan Barcode or Photo**. The viewfinder is large, and the app reads the full camera feed (not just a tiny crop). On phones that support it, use **Torch** and **Zoom**, or tap **Read This Frame** to decode a still at full resolution.
 - **Photo of a printed serial:** take or upload a picture. If there is no barcode, the app boosts contrast and reads the text.
 - **USB / Bluetooth wedge scanner:** select an asset, then scan. The scanner types the value into the app automatically.
 

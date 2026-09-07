@@ -459,7 +459,7 @@ export function ReturnDesk({
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
       <DeskHeader
-        title="Asset return"
+        title="Asset Return"
         description="Filter by who holds the assets, then collect their signature before you confirm. Resignation and Project End clear the assignee. Repair and Upgrade keep them and open a maintenance job."
         mode={payload?.mode}
         loading={loading}
@@ -473,7 +473,7 @@ export function ReturnDesk({
       {payload?.warning ? (
         <Alert>
           <AlertTriangle />
-          <AlertTitle>Running against demo data</AlertTitle>
+          <AlertTitle>Running Against Demo Data</AlertTitle>
           <AlertDescription>{payload.warning}</AlertDescription>
         </Alert>
       ) : null}
@@ -481,7 +481,7 @@ export function ReturnDesk({
       {loadError ? (
         <Alert variant="destructive">
           <AlertTriangle />
-          <AlertTitle>Could not load returns</AlertTitle>
+          <AlertTitle>Could Not Load Returns</AlertTitle>
           <AlertDescription>{loadError}</AlertDescription>
         </Alert>
       ) : null}
@@ -507,7 +507,7 @@ export function ReturnDesk({
           <CardHeader className="border-b">
             <CardTitle className="flex items-center gap-2">
               <ScanLine className="size-4" />
-              Assets out
+              Assets Out
             </CardTitle>
             <CardDescription>
               {selectedHolder
@@ -634,7 +634,7 @@ export function ReturnDesk({
                 <div className="flex min-h-48 flex-col items-center justify-center gap-2 p-8 text-center">
                   <Undo2 className="size-8 text-muted-foreground" />
                   <p className="font-medium">
-                    {selectedHolder ? `Nothing listed for ${selectedHolder.name}` : "No assets in this view"}
+                    {selectedHolder ? `Nothing listed for ${selectedHolder.name}` : "No Assets in This View"}
                   </p>
                   <p className="max-w-sm text-sm text-muted-foreground">
                     {selectedHolder
@@ -687,7 +687,7 @@ export function ReturnDesk({
             <CardTitle className="flex items-center justify-between gap-2">
               <span className="flex items-center gap-2">
                 <Undo2 className="size-4" />
-                Return list ({basket.length})
+                Return List ({basket.length})
               </span>
               {basket.length ? (
                 <Button type="button" size="sm" variant="ghost" onClick={() => setBasket([])}>
@@ -736,7 +736,7 @@ export function ReturnDesk({
                       </div>
                       <div className="mt-3 space-y-3">
                         <ChoiceRow
-                          label="Return reason"
+                          label="Return Reason"
                           options={payload?.options.reasons ?? []}
                           value={item.reason}
                           onChange={(reason) =>
@@ -748,7 +748,7 @@ export function ReturnDesk({
                           }
                         />
                         <ChoiceRow
-                          label="Condition on return"
+                          label="Condition on Return"
                           options={payload?.options.conditions ?? []}
                           value={item.condition}
                           onChange={(condition) =>
@@ -770,7 +770,7 @@ export function ReturnDesk({
                 </ul>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="return-date">Return date</Label>
+                  <Label htmlFor="return-date">Return Date</Label>
                   <Input
                     id="return-date"
                     type="date"
@@ -781,14 +781,14 @@ export function ReturnDesk({
                 </div>
 
                 <ChoiceRow
-                  label="Return location"
+                  label="Return Location"
                   options={payload?.options.locations ?? []}
                   value={location}
                   onChange={setLocation}
                 />
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="return-remarks">Remarks (optional)</Label>
+                  <Label htmlFor="return-remarks">Remarks (Optional)</Label>
                   <Textarea
                     id="return-remarks"
                     value={remarks}
@@ -814,7 +814,7 @@ export function ReturnDesk({
                     </p>
                     <Button type="button" variant="outline" size="sm" onClick={() => void startSignature()}>
                       <PenLine className="size-3.5" />
-                      Collect a new signature
+                      Collect a New Signature
                     </Button>
                   </div>
                 ) : (
@@ -828,7 +828,7 @@ export function ReturnDesk({
                         <QrCode className="size-3.5" />
                       </span>
                       <span>
-                        <span className="block font-medium">Employee acknowledgement</span>
+                        <span className="block font-medium">Employee Acknowledgement</span>
                         <span className="mt-1 block text-muted-foreground">
                           One QR covers every asset in this list. {signer?.name || "The holder"} signs
                           once on their phone.
@@ -867,7 +867,7 @@ export function ReturnDesk({
       {payload?.recent.length ? (
         <Card>
           <CardHeader className="border-b">
-            <CardTitle>Recent returns</CardTitle>
+            <CardTitle>Recent Returns</CardTitle>
             <CardDescription>{payload.transactionTableName}</CardDescription>
           </CardHeader>
           <CardContent className="pt-0">
@@ -905,7 +905,7 @@ export function ReturnDesk({
       <Dialog open={signOpen} onOpenChange={(open) => !signBusy && setSignOpen(open)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Employee signature</DialogTitle>
+            <DialogTitle>Employee Signature</DialogTitle>
             <DialogDescription>
               {signer
                 ? `Ask ${signer.name} to scan this QR on their phone and sign.`
@@ -943,7 +943,7 @@ export function ReturnDesk({
           <DialogFooter>
             {signUrl ? (
               <Button type="button" variant="outline" onClick={() => window.open(signUrl, "_blank")}>
-                Open on this screen
+                Open on This Screen
               </Button>
             ) : null}
             <Button type="button" variant="outline" disabled={signBusy} onClick={() => setSignOpen(false)}>
@@ -956,7 +956,7 @@ export function ReturnDesk({
       <Dialog open={confirmOpen} onOpenChange={(open) => !open && !submitting && setConfirmOpen(false)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Confirm return</DialogTitle>
+            <DialogTitle>Confirm Return</DialogTitle>
             <DialogDescription>
               {basket.length === 1
                 ? `${handoverAssetLabel(basket[0].asset.assetId, basket[0].asset.name)} back to ${location || "stock"}`
@@ -983,10 +983,10 @@ export function ReturnDesk({
           </ul>
           {signaturePreview ? (
             <div className="space-y-1.5">
-              <p className="text-sm font-medium">Employee signature</p>
+              <p className="text-sm font-medium">Employee Signature</p>
               <img
                 src={signaturePreview}
-                alt="Employee signature"
+                alt="Employee Signature"
                 className="w-full rounded-lg bg-white"
               />
             </div>

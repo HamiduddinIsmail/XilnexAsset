@@ -56,7 +56,7 @@ export function AppNav() {
 
   return (
     <nav
-      aria-label="Asset desk tools"
+      aria-label="Asset Desk Tools"
       className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {LINKS.map((link) => {

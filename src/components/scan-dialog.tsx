@@ -469,7 +469,7 @@ export function ScanDialog({ open, onOpenChange, onDetected, showSamples = false
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[min(94vh,920px)] w-[calc(100%-0.75rem)] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Scan serial number</DialogTitle>
+          <DialogTitle>Scan Serial Number</DialogTitle>
           <DialogDescription>
             Fill the box with the barcode. Use the torch in dim light and zoom for small labels.
           </DialogDescription>
@@ -514,7 +514,7 @@ export function ScanDialog({ open, onOpenChange, onDetected, showSamples = false
                 className={cn(torchOn && "bg-[var(--brand)]")}
               >
                 {torchOn ? <FlashlightOff className="size-4" /> : <Flashlight className="size-4" />}
-                {torchOn ? "Torch off" : "Torch"}
+                {torchOn ? "Torch Off" : "Torch"}
               </Button>
             ) : null}
             <Button
@@ -529,7 +529,7 @@ export function ScanDialog({ open, onOpenChange, onDetected, showSamples = false
               ) : (
                 <Aperture className="size-4" />
               )}
-              Read this frame
+              Read This Frame
             </Button>
             <Button
               type="button"
@@ -544,7 +544,7 @@ export function ScanDialog({ open, onOpenChange, onDetected, showSamples = false
               ) : (
                 <ImageUp className="size-4" />
               )}
-              Take or upload photo
+              Take or Upload Photo
             </Button>
             {cameras.length > 1 ? (
               <Button
@@ -555,7 +555,7 @@ export function ScanDialog({ open, onOpenChange, onDetected, showSamples = false
                 onClick={() => void cycleCamera()}
               >
                 <SwitchCamera className="size-4" />
-                Switch camera
+                Switch Camera
               </Button>
             ) : null}
           </div>

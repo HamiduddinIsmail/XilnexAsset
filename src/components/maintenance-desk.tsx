@@ -255,7 +255,7 @@ export function MaintenanceDesk({
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
       <DeskHeader
-        title="Maintenance desk"
+        title="Maintenance Desk"
         description="Send Repair and Upgrade jobs out with vendor and cost, then record the result and condition when they come back. Start and completion dates are filled automatically. Disposal is unchanged for now."
         mode={payload?.mode}
         loading={loading}
@@ -269,7 +269,7 @@ export function MaintenanceDesk({
       {payload?.warning ? (
         <Alert>
           <AlertTriangle />
-          <AlertTitle>Running against demo data</AlertTitle>
+          <AlertTitle>Running Against Demo Data</AlertTitle>
           <AlertDescription>{payload.warning}</AlertDescription>
         </Alert>
       ) : null}
@@ -277,7 +277,7 @@ export function MaintenanceDesk({
       {loadError ? (
         <Alert variant="destructive">
           <AlertTriangle />
-          <AlertTitle>Could not load maintenance</AlertTitle>
+          <AlertTitle>Could Not Load Maintenance</AlertTitle>
           <AlertDescription>{loadError}</AlertDescription>
         </Alert>
       ) : null}
@@ -320,7 +320,7 @@ export function MaintenanceDesk({
                 [
                   ["open", `Open (${openCount})`],
                   ["progress", `In Progress (${progressCount})`],
-                  ["all", "All active"],
+                  ["all", "All Active"],
                 ] as const
               ).map(([value, label]) => (
                 <Button
@@ -347,11 +347,11 @@ export function MaintenanceDesk({
             ) : jobs.length === 0 ? (
               <div className="flex min-h-48 flex-col items-center justify-center gap-2 p-8 text-center">
                 <Wrench className="size-8 text-muted-foreground" />
-                <p className="font-medium">No jobs in this view</p>
+                <p className="font-medium">No Jobs in This View</p>
                 <p className="max-w-sm text-sm text-muted-foreground">
                   {filter === "open"
                     ? "There are no Open maintenance jobs right now."
-                    : "Try All active, or scan a serial to find a job."}
+                    : "Try All Active, or scan a serial to find a job."}
                 </p>
               </div>
             ) : (

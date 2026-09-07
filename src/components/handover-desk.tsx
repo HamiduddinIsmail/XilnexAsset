@@ -450,7 +450,7 @@ export function HandoverDesk({
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
       <DeskHeader
-        title="Asset handover"
+        title="Asset Handover"
         description="Pick who receives the kit, add laptop, mouse, bag, and the rest, then confirm once."
         mode={payload?.mode}
         loading={loading}
@@ -464,7 +464,7 @@ export function HandoverDesk({
       {payload?.warning ? (
         <Alert>
           <AlertTriangle />
-          <AlertTitle>Running against demo data</AlertTitle>
+          <AlertTitle>Running Against Demo Data</AlertTitle>
           <AlertDescription>{payload.warning}</AlertDescription>
         </Alert>
       ) : null}
@@ -472,7 +472,7 @@ export function HandoverDesk({
       {payload?.peopleLimited ? (
         <Alert>
           <UserRound />
-          <AlertTitle>Employee list is incomplete</AlertTitle>
+          <AlertTitle>Employee List Is Incomplete</AlertTitle>
           <AlertDescription>
             {payload.peopleHint ||
               "Lark is only sending people this custom app is allowed to read. Set the app’s Contacts permission to All employees, then tap Refresh."}
@@ -483,7 +483,7 @@ export function HandoverDesk({
       {loadError ? (
         <Alert variant="destructive">
           <AlertTriangle />
-          <AlertTitle>Could not load handover</AlertTitle>
+          <AlertTitle>Could Not Load Handover</AlertTitle>
           <AlertDescription>{loadError}</AlertDescription>
         </Alert>
       ) : null}
@@ -509,7 +509,7 @@ export function HandoverDesk({
           <CardHeader className="border-b">
             <CardTitle className="flex items-center gap-2">
               <ScanLine className="size-4" />
-              Assets to hand over
+              Assets to Hand Over
             </CardTitle>
             <CardDescription>
               Scan or tap several items for the same person. Assigned stock is a transfer.
@@ -551,7 +551,7 @@ export function HandoverDesk({
               {assets.length === 0 ? (
                 <div className="flex min-h-48 flex-col items-center justify-center gap-2 p-8 text-center">
                   <Handshake className="size-8 text-muted-foreground" />
-                  <p className="font-medium">No assets in this view</p>
+                  <p className="font-medium">No Assets in This View</p>
                   <p className="max-w-sm text-sm text-muted-foreground">
                     Try All, or scan a serial. Repair, disposal, and missing assets stay blocked.
                   </p>
@@ -601,7 +601,7 @@ export function HandoverDesk({
             <CardTitle className="flex items-center justify-between gap-2">
               <span className="flex items-center gap-2">
                 <ArrowRightLeft className="size-4" />
-                Handover list ({basket.length})
+                Handover List ({basket.length})
               </span>
               {basket.length ? (
                 <Button type="button" size="sm" variant="ghost" onClick={() => setBasket([])}>
@@ -681,7 +681,7 @@ export function HandoverDesk({
                     </div>
                     <div className="mt-3">
                       <ChoiceRow
-                        label="Condition on handover"
+                        label="Condition on Handover"
                         options={conditions}
                         value={item.condition}
                         onChange={(condition) =>
@@ -699,7 +699,7 @@ export function HandoverDesk({
             )}
 
             <div className="space-y-1.5">
-              <Label htmlFor="handover-date">Handover date</Label>
+              <Label htmlFor="handover-date">Handover Date</Label>
               <Input
                 id="handover-date"
                 type="date"
@@ -716,7 +716,7 @@ export function HandoverDesk({
               onChange={setLocation}
             />
             <ChoiceRow
-              label="Assignment type"
+              label="Assignment Type"
               options={assignmentTypes}
               value={assignmentType}
               onChange={setAssignmentType}
@@ -730,7 +730,7 @@ export function HandoverDesk({
 
             {needsReturnDate(assignmentType) ? (
               <div className="space-y-1.5">
-                <Label htmlFor="return-date">Expected return date</Label>
+                <Label htmlFor="return-date">Expected Return Date</Label>
                 <Input
                   id="return-date"
                   type="date"
@@ -742,7 +742,7 @@ export function HandoverDesk({
             ) : null}
 
             <div className="space-y-1.5">
-              <Label htmlFor="remarks">Remarks (optional)</Label>
+              <Label htmlFor="remarks">Remarks (Optional)</Label>
               <Textarea
                 id="remarks"
                 value={remarks}
@@ -767,7 +767,7 @@ export function HandoverDesk({
                 </p>
                 <Button type="button" variant="outline" size="sm" onClick={() => void startSignature()}>
                   <PenLine className="size-3.5" />
-                  Collect a new signature
+                  Collect a New Signature
                 </Button>
               </div>
             ) : (
@@ -781,7 +781,7 @@ export function HandoverDesk({
                     <QrCode className="size-3.5" />
                   </span>
                   <span>
-                    <span className="block font-medium">Employee acknowledgement</span>
+                    <span className="block font-medium">Employee Acknowledgement</span>
                     <span className="mt-1 block text-muted-foreground">
                       One QR covers every asset in this list. The employee signs once on their phone.
                     </span>
@@ -819,7 +819,7 @@ export function HandoverDesk({
       {payload?.recent.length ? (
         <Card>
           <CardHeader className="border-b">
-            <CardTitle>Recent handovers</CardTitle>
+            <CardTitle>Recent Handovers</CardTitle>
             <CardDescription>{payload.transactionTableName}</CardDescription>
           </CardHeader>
           <CardContent className="pt-0">
@@ -857,7 +857,7 @@ export function HandoverDesk({
       <Dialog open={signOpen} onOpenChange={(open) => !signBusy && setSignOpen(open)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Employee signature</DialogTitle>
+            <DialogTitle>Employee Signature</DialogTitle>
             <DialogDescription>
               {staff
                 ? `Ask ${staff.name} to scan this QR on their phone and sign.`
@@ -895,7 +895,7 @@ export function HandoverDesk({
           <DialogFooter>
             {signUrl ? (
               <Button type="button" variant="outline" onClick={() => window.open(signUrl, "_blank")}>
-                Open on this screen
+                Open on This Screen
               </Button>
             ) : null}
             <Button type="button" variant="outline" disabled={signBusy} onClick={() => setSignOpen(false)}>
@@ -908,7 +908,7 @@ export function HandoverDesk({
       <Dialog open={confirmOpen} onOpenChange={(open) => !open && !submitting && setConfirmOpen(false)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Confirm handover</DialogTitle>
+            <DialogTitle>Confirm Handover</DialogTitle>
             <DialogDescription>
               {staff
                 ? basket.length === 1
@@ -937,10 +937,10 @@ export function HandoverDesk({
           </ul>
           {signaturePreview ? (
             <div className="space-y-1.5">
-              <p className="text-sm font-medium">Employee signature</p>
+              <p className="text-sm font-medium">Employee Signature</p>
               <img
                 src={signaturePreview}
-                alt="Employee signature"
+                alt="Employee Signature"
                 className="w-full rounded-lg bg-white"
               />
             </div>

@@ -224,7 +224,7 @@ export function AssetUpdater({
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
       <DeskHeader
-        title="Serial number updater"
+        title="Serial Number Updater"
         description="Pick an asset from the Asset Register, scan its barcode or serial plate, then write that value to the matching Lark Base record. No copy-paste, no wrong row."
         mode={payload?.mode}
         loading={loading}
@@ -237,7 +237,7 @@ export function AssetUpdater({
       {payload?.warning ? (
         <Alert>
           <AlertTriangle />
-          <AlertTitle>Running against demo data</AlertTitle>
+          <AlertTitle>Running Against Demo Data</AlertTitle>
           <AlertDescription>
             {payload.warning}{" "}
             <Link href="/setup" className="font-medium underline underline-offset-4">
@@ -250,7 +250,7 @@ export function AssetUpdater({
       {loadError ? (
         <Alert variant="destructive">
           <AlertTriangle />
-          <AlertTitle>Could not load assets</AlertTitle>
+          <AlertTitle>Could Not Load Assets</AlertTitle>
           <AlertDescription>
             {loadError}{" "}
             <button
@@ -270,7 +270,7 @@ export function AssetUpdater({
       <div className="grid flex-1 gap-4 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
         <Card className="min-h-[28rem]">
           <CardHeader className="border-b">
-            <CardTitle>1. Select asset</CardTitle>
+            <CardTitle>1. Select Asset</CardTitle>
             <CardDescription>
               {payload
                 ? `${payload.tableName} · ${payload.assets.length} records · ${missingCount} missing a serial`
@@ -285,15 +285,15 @@ export function AssetUpdater({
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search name, tag, or location"
                 className="h-10 pl-8"
-                aria-label="Search assets"
+                aria-label="Search Assets"
               />
             </div>
             <div className="flex flex-wrap gap-1.5">
               {(
                 [
-                  ["missing", "Needs serial"],
-                  ["all", "All assets"],
-                  ["has", "Has serial"],
+                  ["missing", "Needs Serial"],
+                  ["all", "All Assets"],
+                  ["has", "Has Serial"],
                 ] as const
               ).map(([value, label]) => (
                 <Button
@@ -316,7 +316,7 @@ export function AssetUpdater({
                 </div>
               ) : filtered.length === 0 ? (
                 <div className="flex h-full flex-col items-center justify-center gap-1 p-6 text-center">
-                  <p className="font-medium">No matching assets</p>
+                  <p className="font-medium">No Matching Assets</p>
                   <p className="text-sm text-muted-foreground">
                     {filter === "missing"
                       ? "Every visible asset already has a serial, or nothing matched the search."
@@ -376,7 +376,7 @@ export function AssetUpdater({
 
         <Card className="min-h-[28rem]">
           <CardHeader className="border-b">
-            <CardTitle>2. Scan and confirm</CardTitle>
+            <CardTitle>2. Scan and Confirm</CardTitle>
             <CardDescription>
               {selected
                 ? `Writing to the ${payload?.serialField ?? "Serial Number"} field on this record.`
@@ -387,7 +387,7 @@ export function AssetUpdater({
             {!selected ? (
               <div className="flex min-h-72 flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-8 text-center">
                 <Barcode className="size-10 text-muted-foreground" />
-                <p className="font-medium">Select an asset on the left</p>
+                <p className="font-medium">Select an Asset on the Left</p>
                 <p className="max-w-sm text-sm text-muted-foreground">
                   That keeps the serial bound to one Lark Base row. After you pick it, scan,
                   review, then submit.
@@ -397,12 +397,12 @@ export function AssetUpdater({
               <>
                 <div className="rounded-xl bg-muted/60 p-4">
                   <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                    Selected record
+                    Selected Record
                   </p>
                   <p className="mt-1 text-lg font-semibold">{selected.name}</p>
                   <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
                     <div>
-                      <dt className="text-muted-foreground">Current serial</dt>
+                      <dt className="text-muted-foreground">Current Serial</dt>
                       <dd className="font-mono">
                         {selected.serialNumber || "Empty"}
                       </dd>
@@ -426,7 +426,7 @@ export function AssetUpdater({
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="serial">New serial number</Label>
+                  <Label htmlFor="serial">New Serial Number</Label>
                   <Input
                     id="serial"
                     value={serial}
@@ -446,7 +446,7 @@ export function AssetUpdater({
 
                 {candidates.length > 0 ? (
                   <div className="space-y-2">
-                    <p className="text-sm font-medium">Other readings from the photo</p>
+                    <p className="text-sm font-medium">Other Readings from the Photo</p>
                     <div className="flex flex-wrap gap-1.5">
                       {candidates.map((item) => (
                         <Button
@@ -467,7 +467,7 @@ export function AssetUpdater({
                 {duplicate ? (
                   <Alert variant="destructive">
                     <AlertTriangle />
-                    <AlertTitle>Duplicate serial</AlertTitle>
+                    <AlertTitle>Duplicate Serial</AlertTitle>
                     <AlertDescription>
                       {duplicate.name} already uses this serial. Submit is blocked so two
                       assets cannot share one number.
@@ -496,7 +496,7 @@ export function AssetUpdater({
                     onClick={() => setScanOpen(true)}
                   >
                     <ScanLine className="size-4" />
-                    Scan barcode or photo
+                    Scan Barcode or Photo
                   </Button>
                   <Button
                     type="button"
@@ -537,7 +537,7 @@ export function AssetUpdater({
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Write this serial?</DialogTitle>
+            <DialogTitle>Write This Serial?</DialogTitle>
             <DialogDescription>
               This updates one row in {payload?.tableName ?? "Asset Register"}. Check the
               asset name before you confirm.
@@ -578,7 +578,7 @@ export function AssetUpdater({
             </Button>
             <Button type="button" onClick={() => void confirmSubmit()} disabled={submitting}>
               {submitting ? <Loader2 className="size-4 animate-spin" /> : null}
-              {payload?.mode === "lark" ? "Write to Lark Base" : "Save serial"}
+              {payload?.mode === "lark" ? "Write to Lark Base" : "Save Serial"}
             </Button>
           </DialogFooter>
         </DialogContent>

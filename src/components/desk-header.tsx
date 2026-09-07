@@ -25,7 +25,7 @@ export function DeskHeader({
   loading = false,
   onRefresh,
   onScan,
-  scanLabel = "Scan serial",
+  scanLabel = "Scan Serial",
   extraActions,
 }: DeskHeaderProps) {
   return (
@@ -63,7 +63,7 @@ export function DeskHeader({
                 }
                 variant={mode === "lark" ? "default" : "secondary"}
               >
-                {mode === "lark" ? "Lark Base connected" : "Demo mode"}
+                {mode === "lark" ? "Lark Base Connected" : "Demo Mode"}
               </Badge>
             ) : null}
             {onRefresh ? (

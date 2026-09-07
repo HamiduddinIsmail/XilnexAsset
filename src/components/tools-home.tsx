@@ -48,7 +48,7 @@ export function ToolsHome() {
           <div className="min-w-0 space-y-1">
             <p className="text-sm font-medium tracking-wide text-white/90">Xilnex Holdings</p>
             <h1 className="font-heading text-2xl font-semibold tracking-tight sm:text-3xl">
-              Asset desk
+              Asset Desk
             </h1>
             <p className="max-w-xl text-sm text-muted-foreground">
               Pick a tool. Each one writes to the live Lark Base after you confirm.
