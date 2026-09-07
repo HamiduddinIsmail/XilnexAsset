@@ -269,24 +269,22 @@ async function listPeople(ctx: HandoverContext, assets: HandoverAsset[]): Promis
       avatarUrl: "",
     }));
 
-  if (directory.length === 0) {
-    try {
-      const txnRecords = await searchTableRecords(ctx.token, ctx.appToken, ctx.txnTableId, {
-        fieldNames: [ctx.txnFields.staff, ctx.txnFields.requestedBy, ctx.txnFields.approvedBy].filter(
-          (name): name is string => Boolean(name)
-        ),
-        maxRecords: 200,
-        pageSize: 200,
-      });
-      for (const record of txnRecords) {
-        const fields = record.fields ?? {};
-        harvested.push(...parseUsers(fields[ctx.txnFields.staff]));
-        if (ctx.txnFields.requestedBy) harvested.push(...parseUsers(fields[ctx.txnFields.requestedBy]));
-        if (ctx.txnFields.approvedBy) harvested.push(...parseUsers(fields[ctx.txnFields.approvedBy]));
-      }
-    } catch {
-      // Directory harvest is optional; contact list is enough to hand over.
+  try {
+    const txnRecords = await searchTableRecords(ctx.token, ctx.appToken, ctx.txnTableId, {
+      fieldNames: [ctx.txnFields.staff, ctx.txnFields.requestedBy, ctx.txnFields.approvedBy].filter(
+        (name): name is string => Boolean(name)
+      ),
+      maxRecords: 100,
+      pageSize: 100,
+    });
+    for (const record of txnRecords) {
+      const fields = record.fields ?? {};
+      harvested.push(...parseUsers(fields[ctx.txnFields.staff]));
+      if (ctx.txnFields.requestedBy) harvested.push(...parseUsers(fields[ctx.txnFields.requestedBy]));
+      if (ctx.txnFields.approvedBy) harvested.push(...parseUsers(fields[ctx.txnFields.approvedBy]));
     }
+  } catch {
+    // Directory harvest is optional; contact list is enough to hand over.
   }
 
   const people = mergePeople([directory, harvested]);

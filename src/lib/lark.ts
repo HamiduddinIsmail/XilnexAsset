@@ -916,78 +916,42 @@ export async function listCompanyPeople(token: string): Promise<{
   people: LarkPerson[];
   limited: boolean;
 }> {
+  const groups: LarkPerson[][] = [];
+  let scopedDepartments = 0;
+
   try {
-    const people = await listDirectoryEmployees(token);
-    if (people.length > 0) return { people, limited: false };
+    groups.push(await listDirectoryEmployees(token));
   } catch {
-    // Needs directory:employee:list — fall through to Contacts.
+    // Needs directory:employee:list — Contacts scopes below still work.
   }
 
   try {
-    const people = await listUsersInDepartment(token, "0");
-    if (people.length > 0) return { people, limited: false };
+    groups.push(await listUsersInDepartment(token, "0"));
   } catch {
     // Root department requires all-employee contacts permission.
   }
 
-  const groups: LarkPerson[][] = [];
-  let walkedOrg = false;
-
-  try {
-    const childIds = await listDepartmentChildren(token, "0");
-    walkedOrg = true;
-    for (const departmentId of childIds) {
-      try {
-        groups.push(await listUsersInDepartment(token, departmentId));
-      } catch {
-        // Skip departments outside the app's contacts range.
-      }
-    }
-  } catch {
-    // Root department children require all-employee contacts permission.
-  }
-
   try {
     const scopes = await listContactScopeIds(token);
-    walkedOrg = true;
-    for (const departmentId of scopes.departmentIds) {
-      try {
-        groups.push(await listUsersInDepartment(token, departmentId));
-      } catch {
-        // Skip departments outside the app's contacts range.
-      }
-    }
-    for (const userId of scopes.userIds) {
-      try {
-        const person = await getContactUser(token, userId);
-        if (person) groups.push([person]);
-      } catch {
-        // Scope ids can include users the token cannot hydrate.
-      }
+    scopedDepartments = scopes.departmentIds.length;
+    const fromDepts = await Promise.all(
+      scopes.departmentIds.map((departmentId) =>
+        listUsersInDepartment(token, departmentId).catch(() => [])
+      )
+    );
+    groups.push(...fromDepts);
+    const fromUsers = await Promise.all(
+      scopes.userIds.map((userId) => getContactUser(token, userId).catch(() => null))
+    );
+    for (const person of fromUsers) {
+      if (person) groups.push([person]);
     }
   } catch {
     // Contacts scope is optional.
   }
 
-  try {
-    const listed: LarkPerson[] = [];
-    await paginatedGet<{
-      has_more?: boolean;
-      page_token?: string;
-      items?: ContactUser[];
-    }>(token, "/open-apis/contact/v3/users?page_size=50&user_id_type=open_id", (data) => {
-      for (const user of data?.items ?? []) {
-        const person = personFromContactUser(user);
-        if (person) listed.push(person);
-      }
-    });
-    groups.push(listed);
-  } catch {
-    // Contacts user list is a fallback only.
-  }
-
   const people = mergeLarkPeople(groups);
-  return { people, limited: !walkedOrg || people.length === 0 };
+  return { people, limited: people.length === 0 || (scopedDepartments === 0 && people.length < 5) };
 }
 
 export async function listContactUsers(token: string) {
